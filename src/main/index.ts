@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, Menu, nativeImage } from 'electron'
+import { app, BrowserWindow, Tray, Menu, nativeImage, session } from 'electron'
 import path from 'path'
 import log from 'electron-log'
 import { ConfigStore } from './services/config-store'
@@ -14,6 +14,7 @@ log.transports.console.level = 'debug'
 class App {
   private mainWindow: BrowserWindow | null = null
   private tray: Tray | null = null
+  private isQuitting = false
   private configStore: ConfigStore
   private transferManager: TransferManager
   private scheduler: Scheduler
@@ -29,6 +30,11 @@ class App {
   async init() {
     // 等待应用就绪
     await app.whenReady()
+
+    // Dev 模式关闭安全警告（Vite HMR 需要 unsafe-eval）
+    if (!app.isPackaged) {
+      process.env['ELECTRON_DISABLE_SECURITY_WARNINGS'] = 'true'
+    }
 
     // 创建主窗口
     this.createMainWindow()
@@ -80,7 +86,7 @@ class App {
 
     // 关闭时隐藏到托盘而非退出
     this.mainWindow.on('close', (event) => {
-      if (!app.isQuitting) {
+      if (!this.isQuitting) {
         event.preventDefault()
         this.mainWindow?.hide()
       }
@@ -121,7 +127,7 @@ class App {
       {
         label: '退出',
         click: () => {
-          app.isQuitting = true
+          this.isQuitting = true
           app.quit()
         },
       },
@@ -176,16 +182,17 @@ class App {
 
     // macOS: 点击dock图标时显示窗口
     app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) {
-        this.createMainWindow()
+      if (this.mainWindow) {
+        this.mainWindow.show()
+        this.mainWindow.focus()
       } else {
-        this.mainWindow?.show()
+        this.createMainWindow()
       }
     })
 
     // 应用退出前清理
     app.on('before-quit', () => {
-      app.isQuitting = true
+      this.isQuitting = true
       this.scheduler.stopAll()
       this.fileWatcher.stopAll()
       log.info('应用退出')
@@ -199,12 +206,3 @@ ftpUploader.init().catch((error) => {
   log.error('应用启动失败:', error)
   app.quit()
 })
-
-// 扩展app类型
-declare module 'electron' {
-  interface App {
-    isQuitting: boolean
-  }
-}
-
-app.isQuitting = false

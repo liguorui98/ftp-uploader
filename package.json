@@ -6,13 +6,13 @@
   "author": "liguorui",
   "license": "MIT",
   "scripts": {
-    "dev": "electron-vite dev",
-    "build": "electron-vite build --outDir .vite",
+    "dev": "env -u ELECTRON_RUN_AS_NODE electron-vite dev",
+    "build": "electron-vite build",
     "preview": "electron-vite preview",
     "package": "electron-forge package",
     "make": "electron-forge make",
-    "make:mac": "electron-vite build --outDir .vite && electron-forge make --platform darwin",
-    "make:win": "electron-vite build --outDir .vite && electron-forge make --platform win32",
+    "make:mac": "electron-vite build && electron-forge make --platform darwin",
+    "make:win": "electron-vite build && electron-forge make --platform win32",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
     "typecheck": "npm run typecheck:node && npm run typecheck:web"

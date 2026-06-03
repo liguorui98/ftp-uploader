@@ -5,6 +5,7 @@ import path from 'path'
 export default defineConfig({
   main: {
     build: {
+      outDir: path.resolve(__dirname, '.vite/main'),
       rollupOptions: {
         external: [
           // Electron
@@ -23,6 +24,7 @@ export default defineConfig({
   },
   preload: {
     build: {
+      outDir: path.resolve(__dirname, '.vite/preload'),
       lib: {
         entry: path.resolve(__dirname, 'src/main/preload/index.ts'),
       },
@@ -32,6 +34,9 @@ export default defineConfig({
     },
   },
   renderer: {
+    build: {
+      outDir: path.resolve(__dirname, '.vite/renderer'),
+    },
     plugins: [react()],
     root: './src/renderer',
     resolve: {

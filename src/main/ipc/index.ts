@@ -136,7 +136,7 @@ export function registerDialogIPC(mainWindow: BrowserWindow) {
 }
 
 export function registerAppIPC() {
-  const pkg = require('../../../package.json')
+  const pkg = require(path.join(__dirname, '../../package.json'))
 
   ipcMain.handle('app:version', async () => {
     return pkg.version
