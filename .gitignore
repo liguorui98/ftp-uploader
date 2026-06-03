@@ -1,0 +1,15 @@
+# 系统文件
+.DS_Store
+.claude/
+
+# 依赖包
+node_modules/
+
+# 构建/缓存目录
+.vite/
+out/
+dist/
+build/
+
+# 环境变量（可选）
+.env.local
