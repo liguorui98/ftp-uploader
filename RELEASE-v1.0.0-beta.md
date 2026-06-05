@@ -1,8 +1,8 @@
-# FTP Uploader v1.0.0
+# FTP Uploader v1.0.0-beta
 
 **发布日期**：2026-06-05
 
-FTP Uploader 首个正式版本发布。一款基于 Electron 的 FTP/SFTP 自动上传桌面应用，支持 macOS 和 Windows。
+FTP Uploader 首个Beta版本发布。一款基于 Electron 的 FTP/SFTP 自动上传桌面应用，支持 macOS 和 Windows。
 
 ---
 
