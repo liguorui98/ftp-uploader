@@ -1,5 +1,5 @@
 import Store from 'electron-store'
-import { safeStorage } from 'electron'
+import { safeStorage } from '../electron-shim'
 import log from 'electron-log'
 
 // 类型定义

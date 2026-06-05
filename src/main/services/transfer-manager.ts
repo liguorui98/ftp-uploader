@@ -1,4 +1,4 @@
-import { BrowserWindow } from 'electron'
+import { BrowserWindow } from '../electron-shim'
 import { nanoid } from 'nanoid'
 import log from 'electron-log'
 import { ConfigStore, TransferTask, ServerConfig } from './config-store'

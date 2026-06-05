@@ -140,7 +140,7 @@ const Dashboard: React.FC = () => {
     {
       title: '文件',
       key: 'files',
-      render: (_, record: TransferTask) => (
+      render: (_: unknown, record: TransferTask) => (
         <Text ellipsis style={{ maxWidth: 200 }}>
           {record.files?.map((f) => f.fileName).join(', ')}
         </Text>

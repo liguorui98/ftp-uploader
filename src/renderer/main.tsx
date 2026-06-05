@@ -5,19 +5,23 @@ import zhCN from 'antd/locale/zh_CN'
 import App from './App'
 import './assets/styles/global.css'
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <ConfigProvider
-      locale={zhCN}
-      theme={{
-        algorithm: theme.defaultAlgorithm,
-        token: {
-          colorPrimary: '#1890ff',
-          borderRadius: 6,
-        },
-      }}
-    >
-      <App />
-    </ConfigProvider>
-  </React.StrictMode>
-)
+try {
+  ReactDOM.createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
+      <ConfigProvider
+        locale={zhCN}
+        theme={{
+          algorithm: theme.defaultAlgorithm,
+          token: {
+            colorPrimary: '#1890ff',
+            borderRadius: 6,
+          },
+        }}
+      >
+        <App />
+      </ConfigProvider>
+    </React.StrictMode>
+  )
+} catch (error) {
+  console.error('[main] Render error:', error)
+}

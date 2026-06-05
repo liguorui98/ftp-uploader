@@ -378,7 +378,7 @@ const TransferList: React.FC = () => {
     {
       title: '文件',
       key: 'files',
-      render: (_, record: TransferTask) => (
+      render: (_: unknown, record: TransferTask) => (
         <Space direction="vertical" size={0}>
           {record.files?.slice(0, 2).map((file, index) => (
             <Text key={index} ellipsis style={{ maxWidth: 250 }}>
@@ -395,7 +395,7 @@ const TransferList: React.FC = () => {
       title: '大小',
       key: 'size',
       width: 100,
-      render: (_, record: TransferTask) => {
+      render: (_: unknown, record: TransferTask) => {
         const totalSize = record.files?.reduce((sum, f) => sum + f.fileSize, 0) || 0
         if (totalSize < 1024) return `${totalSize} B`
         if (totalSize < 1024 * 1024) return `${(totalSize / 1024).toFixed(1)} KB`
@@ -424,7 +424,7 @@ const TransferList: React.FC = () => {
       title: '耗时',
       key: 'duration',
       width: 100,
-      render: (_, record: TransferTask) => {
+      render: (_: unknown, record: TransferTask) => {
         if (!record.startTime || !record.endTime) return '-'
         const duration = record.endTime - record.startTime
         if (duration < 1000) return `${duration}ms`
@@ -436,7 +436,7 @@ const TransferList: React.FC = () => {
       title: '操作',
       key: 'actions',
       width: 120,
-      render: (_, record: TransferTask) => (
+      render: (_: unknown, record: TransferTask) => (
         <Space>
           {record.status === 'failed' && (
             <Tooltip title="重试">

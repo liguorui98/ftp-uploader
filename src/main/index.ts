@@ -1,5 +1,6 @@
-import { app, BrowserWindow, Tray, Menu, nativeImage, session } from 'electron'
+import { app, BrowserWindow, Tray, Menu, nativeImage, protocol } from './electron-shim'
 import path from 'path'
+import fs from 'fs'
 import log from 'electron-log'
 import { ConfigStore } from './services/config-store'
 import { TransferManager } from './services/transfer-manager'
@@ -10,6 +11,22 @@ import { registerConfigIPC, registerTransferIPC, registerDialogIPC, registerFile
 // 配置日志
 log.transports.file.level = 'info'
 log.transports.console.level = 'debug'
+
+// 注册自定义 app:// 协议（必须在 app.whenReady() 之前调用）
+// 为渲染进程提供标准 Origin，解决 file:// 下 ESM 模块 CORS 白屏问题
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'app',
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      bypassCSP: true,
+      corsEnabled: true,
+    },
+  },
+])
+
 
 class App {
   private mainWindow: BrowserWindow | null = null
@@ -36,6 +53,9 @@ class App {
       process.env['ELECTRON_DISABLE_SECURITY_WARNINGS'] = 'true'
     }
 
+    // 注册自定义协议处理（生产环境关键：file:// 下 ESM 模块会被 CORS 阻止 → 白屏）
+    this.registerAppProtocol()
+
     // 创建主窗口
     this.createMainWindow()
 
@@ -55,6 +75,62 @@ class App {
     log.info('应用启动完成')
   }
 
+  /**
+   * 注册 app:// 自定义协议 — 为渲染进程提供标准 Origin，解决 ESM 模块的 CORS 白屏问题。
+   * 在 file:// 协议下，Chromium 将 origin 视为 null，
+   * 导致 <script type="module"> 因 CORS 检查而被拒绝执行。
+   */
+  private registerAppProtocol() {
+    const rendererDir = path.join(app.getAppPath(), '.vite/renderer')
+
+    const mimeTypes: Record<string, string> = {
+      '.html': 'text/html; charset=utf-8',
+      '.js': 'application/javascript',
+      '.mjs': 'application/javascript',
+      '.css': 'text/css',
+      '.json': 'application/json',
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.svg': 'image/svg+xml',
+      '.ico': 'image/x-icon',
+      '.woff': 'font/woff',
+      '.woff2': 'font/woff2',
+    }
+
+    protocol.handle('app', (request) => {
+      const { pathname } = new URL(request.url)
+      const relativePath = pathname.replace(/^\//, '')
+      const filePath = path.normalize(path.join(rendererDir, relativePath))
+      const ext = path.extname(filePath).toLowerCase()
+
+      log.info(`[protocol] ${request.url} → ${relativePath} (ext=${ext})`)
+
+      try {
+        if (!filePath.startsWith(rendererDir)) {
+          log.warn('[protocol] 路径穿越拦截:', request.url)
+          return new Response('Forbidden', { status: 403 })
+        }
+
+        const data = fs.readFileSync(filePath)
+        const contentType = mimeTypes[ext] || 'application/octet-stream'
+
+        const arrayBuffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)
+        log.info(`[protocol] 响应: ${relativePath} (${contentType}, ${data.byteLength} bytes)`)
+        return new Response(arrayBuffer, {
+          headers: {
+            'Content-Type': contentType,
+            'Content-Length': String(data.byteLength),
+          }
+        })
+      } catch (err: any) {
+        log.error(`[protocol] 404: ${request.url} — ${err.message}`)
+        return new Response('Not Found', { status: 404 })
+      }
+    })
+
+    log.info('自定义协议 app:// 已注册，渲染目录:', rendererDir)
+  }
+
   private createMainWindow() {
     this.mainWindow = new BrowserWindow({
       width: 1200,
@@ -62,7 +138,7 @@ class App {
       minWidth: 900,
       minHeight: 600,
       webPreferences: {
-        preload: path.join(__dirname, '../preload/index.js'),
+        preload: path.join(app.getAppPath(), '.vite/preload/index.js'),
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: false,
@@ -71,13 +147,26 @@ class App {
       show: false,
     })
 
-    // 开发环境加载开发服务器，生产环境加载打包文件
+    // 开发环境加载开发服务器，生产环境通过 app:// 自定义协议加载
     if (process.env.NODE_ENV === 'development' || process.env.ELECTRON_RENDERER_URL) {
       this.mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL || 'http://localhost:5173')
       this.mainWindow.webContents.openDevTools()
     } else {
-      this.mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'))
+      // 使用自定义协议 app:// 而非 file://，避免 ESM 模块 CORS 白屏
+      this.mainWindow.loadURL('app://renderer/index.html')
+      this.mainWindow.webContents.openDevTools()
     }
+
+    // 诊断：捕获页面加载失败
+    this.mainWindow.webContents.on('did-fail-load', (_event: any, errorCode: number, errorDescription: string, validatedURL: string) => {
+      log.error(`页面加载失败: code=${errorCode} desc=${errorDescription} url=${validatedURL}`)
+    })
+
+    // 诊断：转发渲染进程控制台到主进程日志
+    this.mainWindow.webContents.on('console-message', (_event: any, level: number, message: string, line: number, sourceId: string) => {
+      const levels = ['verbose', 'info', 'warning', 'error']
+      log.info(`[renderer ${levels[level] || level}] ${message} (${sourceId}:${line})`)
+    })
 
     // 窗口准备好后显示
     this.mainWindow.once('ready-to-show', () => {
@@ -97,7 +186,7 @@ class App {
   }
 
   private createTray() {
-    const iconPath = path.join(__dirname, '../../resources/icon.png')
+    const iconPath = path.join(app.getAppPath(), 'resources/icon.png')
     const icon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 })
 
     this.tray = new Tray(icon)

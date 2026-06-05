@@ -39,6 +39,13 @@ class FTPClient implements TransferClient {
   async connect(config: ServerConfig): Promise<void> {
     this.config = config
 
+    const timeout = config.timeout || 30000
+
+    // 按配置的超时时间重建客户端（basic-ftp 仅在构造函数中接受 timeout）
+    this.client.close()
+    this.client = new ftp.Client(timeout)
+    this.client.ftp.verbose = false
+
     const options: ftp.AccessOptions = {
       host: config.host,
       port: config.port || 21,
@@ -46,7 +53,6 @@ class FTPClient implements TransferClient {
       password: config.password,
       secure: config.ftpOptions?.secure || false,
       secureOptions: undefined,
-      timeout: config.timeout || 30000,
     }
 
     try {

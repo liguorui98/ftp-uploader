@@ -1,5 +1,5 @@
 import log from 'electron-log'
-import { app } from 'electron'
+import { app } from '../electron-shim'
 import path from 'path'
 
 // 配置日志

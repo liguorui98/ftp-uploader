@@ -5,6 +5,39 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
     <title>FTP Uploader</title>
+    <script>
+      window.__APP_BOOT__ = Date.now();
+      console.log('[diagnostic] HTML loaded via', location.href);
+      window.addEventListener('error', function(e) {
+        console.error('[diagnostic] Global error:', e.message, e.filename, e.lineno);
+      });
+      window.addEventListener('unhandledrejection', function(e) {
+        console.error('[diagnostic] Unhandled rejection:', e.reason);
+      });
+
+      // 自测试：延迟 2 秒后检查模块是否加载、React 是否渲染
+      setTimeout(function() {
+        var root = document.getElementById('root');
+        var hasContent = root && root.children.length > 0;
+        console.log('[diagnostic] DOM check: root has ' + (root ? root.children.length : 0) + ' children');
+
+        if (!hasContent) {
+          // React 未渲染 — 用 import() 测试模块是否可执行（fetch 只测网络，import 测执行）
+          // 用 new Function 隐藏 import() 避免 Vite 静态分析
+          var moduleSrc = document.querySelector('script[type="module"]').src;
+          console.log('[diagnostic] Module src:', moduleSrc);
+          new Function('url', 'return import(url)')(moduleSrc)
+            .then(function() {
+              console.log('[diagnostic] Module evaluated OK, but root still empty');
+            })
+            .catch(function(e) {
+              console.error('[diagnostic] Module evaluation FAILED:', e.message, e.stack);
+            });
+        } else {
+          console.log('[diagnostic] React rendered successfully!');
+        }
+      }, 2000);
+    </script>
   </head>
   <body>
     <div id="root"></div>

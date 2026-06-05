@@ -1,4 +1,4 @@
-import { ipcMain, dialog, shell, BrowserWindow, app } from 'electron'
+import { ipcMain, dialog, shell, BrowserWindow, app } from '../electron-shim'
 import path from 'path'
 import glob from 'fast-glob'
 import { ConfigStore } from '../services/config-store'
@@ -136,7 +136,7 @@ export function registerDialogIPC(mainWindow: BrowserWindow) {
 }
 
 export function registerAppIPC() {
-  const pkg = require(path.join(__dirname, '../../package.json'))
+  const pkg = require(path.join(app.getAppPath(), 'package.json'))
 
   ipcMain.handle('app:version', async () => {
     return pkg.version

@@ -1,6 +1,6 @@
 import path from 'path'
 import fs from 'fs'
-import { app } from 'electron'
+import { app } from '../electron-shim'
 
 // 获取应用数据目录
 export function getAppDataPath(): string {
