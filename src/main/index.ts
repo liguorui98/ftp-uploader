@@ -132,6 +132,25 @@ class App {
   }
 
   private createMainWindow() {
+    // 跨平台标题栏配置
+    const platformTitleBarConfig = process.platform === 'darwin'
+      ? {
+          // macOS: 使用 hiddenInset，红绿灯向内缩进
+          titleBarStyle: 'hiddenInset' as const,
+        }
+      : {
+          // Windows: 使用 hidden + titleBarOverlay，保留原生控制按钮
+          titleBarStyle: 'hidden' as const,
+          titleBarOverlay: {
+            // 透明背景，与应用界面无缝融合
+            color: 'transparent',
+            // 按钮图标颜色（黑色，适合浅色主题；深色主题请改为 '#ffffff'）
+            symbolColor: '#000000',
+            // 按钮高度（Windows默认32px，与macOS标题栏高度接近）
+            height: 32
+          }
+        }
+
     this.mainWindow = new BrowserWindow({
       width: 1200,
       height: 800,
@@ -143,7 +162,8 @@ class App {
         nodeIntegration: false,
         sandbox: false,
       },
-      titleBarStyle: 'hiddenInset',
+      // 应用跨平台标题栏配置
+      ...platformTitleBarConfig,
       show: false,
     })
 
@@ -154,7 +174,7 @@ class App {
     } else {
       // 使用自定义协议 app:// 而非 file://，避免 ESM 模块 CORS 白屏
       this.mainWindow.loadURL('app://renderer/index.html')
-      this.mainWindow.webContents.openDevTools()
+      //this.mainWindow.webContents.openDevTools()
     }
 
     // 诊断：捕获页面加载失败
