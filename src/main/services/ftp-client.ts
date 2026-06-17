@@ -95,10 +95,22 @@ class FTPClient implements TransferClient {
       const stats = fs.statSync(localPath)
       const totalSize = stats.size
 
-      // 上传文件
-      await this.client.uploadFrom(localPath, remotePath)
+      if (onProgress && totalSize > 0) {
+        // 流式上传以支持进度追踪
+        const readStream = fs.createReadStream(localPath, { highWaterMark: 256 * 1024 })
+        let transferred = 0
 
-      // 由于basic-ftp不直接支持进度回调，我们在上传完成后通知
+        readStream.on('data', (chunk: string | Buffer) => {
+          transferred += Buffer.byteLength(chunk)
+          onProgress(transferred, totalSize)
+        })
+
+        await this.client.uploadFrom(readStream, remotePath)
+      } else {
+        await this.client.uploadFrom(localPath, remotePath)
+      }
+
+      // 确保最终进度回调为100%
       if (onProgress) {
         onProgress(totalSize, totalSize)
       }
@@ -285,11 +297,20 @@ class SFTPClient implements TransferClient {
       const totalSize = stats.size
 
       // 使用createReadStream支持进度回调
-      const readStream = fs.createReadStream(localPath)
+      const readStream = fs.createReadStream(localPath, { highWaterMark: 256 * 1024 })
+
+      if (onProgress && totalSize > 0) {
+        let transferred = 0
+        readStream.on('data', (chunk: string | Buffer) => {
+          transferred += Buffer.byteLength(chunk)
+          onProgress(transferred, totalSize)
+        })
+      }
 
       // ssh2-sftp-client的上传方法
       await this.client.put(readStream, remotePath)
 
+      // 确保最终进度回调为100%
       if (onProgress) {
         onProgress(totalSize, totalSize)
       }

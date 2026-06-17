@@ -1,6 +1,6 @@
 {
   "name": "ftp-uploader",
-  "version": "1.0.0-beta",
+  "version": "1.0.1-beta",
   "description": "FTP/SFTP自动上传桌面应用",
   "main": ".vite/main/index.js",
   "author": "liguorui",

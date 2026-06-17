@@ -29,6 +29,7 @@ export class TransferManager {
   // 添加传输任务
   enqueue(params: {
     serverId: string
+    folderName?: string
     files: Array<{ localPath: string; remotePath: string }>
   }): string {
     const server = this.configStore.getServerById(params.serverId)
@@ -40,6 +41,7 @@ export class TransferManager {
       id: nanoid(),
       serverId: params.serverId,
       serverName: server.name,
+      folderName: params.folderName,
       files: params.files.map((f) => ({
         ...f,
         fileName: f.localPath.split('/').pop() || f.localPath.split('\\').pop() || '',
@@ -195,12 +197,27 @@ export class TransferManager {
 
     const client = createClient(server.type)
 
+    // 速度追踪变量
+    let lastTransferred = 0
+    let lastTime = Date.now()
+    let speed = 0
+    let lastProgressEmitTime = 0
+    const PROGRESS_THROTTLE_MS = 300
+
     try {
       // 连接服务器
       task.status = 'connecting'
       this.sendToRenderer('transfer:progress', {
         id: task.id,
         status: 'connecting',
+        fileIndex: 0,
+        transferred: 0,
+        total: 0,
+        speed: 0,
+        elapsedTime: 0,
+        estimatedTimeRemaining: 0,
+        totalTransferred: 0,
+        totalSize: 0,
       })
 
       await client.connect(server)
@@ -226,19 +243,64 @@ export class TransferManager {
               const totalSize = task.files.reduce((sum, f) => sum + f.fileSize, 0)
               task.progress = totalSize > 0 ? Math.round((totalTransferred / totalSize) * 100) : 0
 
-              // 通知渲染进程
-              this.sendToRenderer('transfer:progress', {
-                id: task.id,
-                fileIndex: i,
-                transferred,
-                total,
-                speed: 0, // TODO: 计算速度
-              })
+              // 节流：最多每 300ms 发送一次进度到渲染进程
+              const now = Date.now()
+              if (now - lastProgressEmitTime >= PROGRESS_THROTTLE_MS) {
+                lastProgressEmitTime = now
+
+                // 计算速度（bytes/second）
+                const timeDelta = now - lastTime
+                if (timeDelta >= 200) {
+                  const bytesDelta = totalTransferred - lastTransferred
+                  speed = Math.round((bytesDelta / timeDelta) * 1000)
+                  lastTransferred = totalTransferred
+                  lastTime = now
+                }
+
+                // 计算已用时间和预计剩余时间
+                const elapsedTime = task.startTime ? now - task.startTime : 0
+                const estimatedTimeRemaining =
+                  speed > 0 && totalSize > totalTransferred
+                    ? Math.round(((totalSize - totalTransferred) / speed) * 1000)
+                    : 0
+
+                this.sendToRenderer('transfer:progress', {
+                  id: task.id,
+                  fileIndex: i,
+                  transferred,
+                  total,
+                  speed,
+                  elapsedTime,
+                  estimatedTimeRemaining,
+                  totalTransferred,
+                  totalSize,
+                })
+              }
             }
           )
 
           file.status = 'completed'
           log.info(`文件传输完成: ${file.fileName}`)
+
+          // 发送最终进度确保UI更新到100%
+          {
+            const totalTransferred = task.files.reduce((sum, f) => sum + f.transferred, 0)
+            const totalSize = task.files.reduce((sum, f) => sum + f.fileSize, 0)
+            task.progress = totalSize > 0 ? Math.round((totalTransferred / totalSize) * 100) : 0
+            const now = Date.now()
+            const elapsedTime = task.startTime ? now - task.startTime : 0
+            this.sendToRenderer('transfer:progress', {
+              id: task.id,
+              fileIndex: i,
+              transferred: file.transferred,
+              total: file.fileSize,
+              speed,
+              elapsedTime,
+              estimatedTimeRemaining: 0,
+              totalTransferred,
+              totalSize,
+            })
+          }
         } catch (error) {
           file.status = 'failed'
           throw error

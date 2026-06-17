@@ -26,6 +26,7 @@ export interface ElectronAPI {
   pauseAll: () => Promise<void>
   resumeAll: () => Promise<void>
   clearHistory: () => Promise<void>
+  deleteTransfer: (id: string) => Promise<void>
 
   // 定时任务
   getSchedules: () => Promise<ScheduleConfig[]>
@@ -42,7 +43,11 @@ export interface ElectronAPI {
   // 系统对话框
   selectFiles: () => Promise<string[]>
   selectFolder: () => Promise<string | null>
-  selectFolderForUpload: () => Promise<string[]>
+  selectFolderForUpload: () => Promise<{
+    folderPath: string
+    folderName: string
+    files: Array<{ filePath: string; relativePath: string }>
+  } | null>
   selectPrivateKey: () => Promise<string | null>
   saveFile: (options?: any) => Promise<string | null>
   showMessage: (options: any) => Promise<number>
@@ -55,6 +60,7 @@ export interface ElectronAPI {
 
   // 事件监听
   onTransferProgress: (callback: (data: TransferProgress) => void) => void
+  onTransferStarted: (callback: (data: TransferTask) => void) => void
   onTransferComplete: (callback: (data: TransferTask) => void) => void
   onTransferError: (callback: (data: { id: string; error: string }) => void) => void
   onLogMessage: (callback: (data: LogMessage) => void) => void

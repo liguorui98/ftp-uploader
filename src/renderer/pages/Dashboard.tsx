@@ -14,11 +14,42 @@ const { Title, Text } = Typography
 interface TransferTask {
   id: string
   serverName: string
+  folderName?: string
   files: Array<{ fileName: string; fileSize: number; status: string }>
   status: string
   progress: number
   startTime?: number
   endTime?: number
+}
+
+interface ProgressInfo {
+  speed: number
+  elapsedTime: number
+  estimatedTimeRemaining: number
+  totalTransferred: number
+  totalSize: number
+}
+
+const formatBytes = (bytes: number): string => {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
+}
+
+const formatSpeed = (bytesPerSecond: number): string => {
+  if (bytesPerSecond === 0) return '...'
+  if (bytesPerSecond < 1024) return `${bytesPerSecond} B/s`
+  if (bytesPerSecond < 1024 * 1024) return `${(bytesPerSecond / 1024).toFixed(1)} KB/s`
+  return `${(bytesPerSecond / (1024 * 1024)).toFixed(1)} MB/s`
+}
+
+const formatDuration = (ms: number): string => {
+  if (ms < 1000) return `${ms}ms`
+  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`
+  const minutes = Math.floor(ms / 60000)
+  const seconds = Math.round((ms % 60000) / 1000)
+  return `${minutes}m ${seconds}s`
 }
 
 const Dashboard: React.FC = () => {
@@ -32,6 +63,7 @@ const Dashboard: React.FC = () => {
   })
   const [recentTransfers, setRecentTransfers] = useState<TransferTask[]>([])
   const [activeTransfers, setActiveTransfers] = useState<TransferTask[]>([])
+  const [progressData, setProgressData] = useState<Record<string, ProgressInfo>>({})
 
   useEffect(() => {
     fetchData()
@@ -39,19 +71,39 @@ const Dashboard: React.FC = () => {
     // 监听传输事件
     if (window.electronAPI) {
       window.electronAPI.onTransferProgress?.((data) => {
-        // 更新活跃传输状态
+        const progress = data.totalSize > 0 ? Math.round((data.totalTransferred / data.totalSize) * 100) : 0
         setActiveTransfers((prev) =>
           prev.map((t) =>
-            t.id === data.id
-              ? { ...t, progress: Math.round((data.transferred / data.total) * 100) }
-              : t
+            t.id === data.id ? { ...t, progress } : t
           )
         )
+        setProgressData((prev) => ({
+          ...prev,
+          [data.id]: {
+            speed: data.speed,
+            elapsedTime: data.elapsedTime,
+            estimatedTimeRemaining: data.estimatedTimeRemaining,
+            totalTransferred: data.totalTransferred,
+            totalSize: data.totalSize,
+          },
+        }))
+      })
+
+      window.electronAPI.onTransferStarted?.((data) => {
+        setActiveTransfers((prev) => {
+          if (prev.find((t) => t.id === data.id)) return prev
+          return [...prev, data]
+        })
+        setStats((prev) => ({ ...prev, active: prev.active + 1 }))
       })
 
       window.electronAPI.onTransferComplete?.((data) => {
-        // 移除完成的传输，添加到历史
         setActiveTransfers((prev) => prev.filter((t) => t.id !== data.id))
+        setProgressData((prev) => {
+          const next = { ...prev }
+          delete next[data.id]
+          return next
+        })
         setRecentTransfers((prev) => [data, ...prev.slice(0, 9)])
         setStats((prev) => ({
           ...prev,
@@ -63,6 +115,11 @@ const Dashboard: React.FC = () => {
 
       window.electronAPI.onTransferError?.((data) => {
         setActiveTransfers((prev) => prev.filter((t) => t.id !== data.id))
+        setProgressData((prev) => {
+          const next = { ...prev }
+          delete next[data.id]
+          return next
+        })
         setStats((prev) => ({
           ...prev,
           failed: prev.failed + 1,
@@ -76,6 +133,7 @@ const Dashboard: React.FC = () => {
       // 清理监听器
       if (window.electronAPI) {
         window.electronAPI.removeAllListeners?.('transfer:progress')
+        window.electronAPI.removeAllListeners?.('transfer:started')
         window.electronAPI.removeAllListeners?.('transfer:complete')
         window.electronAPI.removeAllListeners?.('transfer:error')
       }
@@ -227,19 +285,48 @@ const Dashboard: React.FC = () => {
       {/* 活跃传输 */}
       {activeTransfers.length > 0 && (
         <Card title="正在进行的传输" style={{ marginBottom: 24 }}>
-          {activeTransfers.map((transfer) => (
-            <div key={transfer.id} style={{ marginBottom: 16 }}>
-              <Space style={{ marginBottom: 8 }}>
-                <SyncOutlined spin />
-                <Text strong>{transfer.serverName}</Text>
-                <Text type="secondary">
-                  {transfer.files?.[0]?.fileName}
-                  {transfer.files && transfer.files.length > 1 && ` 等 ${transfer.files.length} 个文件`}
-                </Text>
-              </Space>
-              <Progress percent={transfer.progress} status="active" />
-            </div>
-          ))}
+          {activeTransfers.map((transfer) => {
+            const pd = progressData[transfer.id]
+            return (
+              <div key={transfer.id} style={{ marginBottom: 16 }}>
+                <Space style={{ marginBottom: 8 }}>
+                  <SyncOutlined spin />
+                  <Text strong>{transfer.serverName}</Text>
+                  <Text type="secondary">
+                    {transfer.folderName
+                      ? transfer.folderName
+                      : transfer.files?.[0]?.fileName}
+                    {transfer.folderName
+                      ? ` (${transfer.files?.length || 0} 个文件)`
+                      : transfer.files && transfer.files.length > 1 && ` 等 ${transfer.files.length} 个文件`}
+                  </Text>
+                </Space>
+                {pd && (
+                  <Space style={{ marginBottom: 4 }} size={16}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      {formatBytes(pd.totalTransferred)} / {formatBytes(pd.totalSize)}
+                    </Text>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      {formatSpeed(pd.speed)}
+                    </Text>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      已用时 {formatDuration(pd.elapsedTime)}
+                    </Text>
+                    {pd.estimatedTimeRemaining > 0 && (
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        剩余 {formatDuration(pd.estimatedTimeRemaining)}
+                      </Text>
+                    )}
+                  </Space>
+                )}
+                <Progress
+                  percent={transfer.progress}
+                  status="active"
+                  format={(percent) => `${percent}%`}
+                />
+              </div>
+            )
+          })}
         </Card>
       )}
 

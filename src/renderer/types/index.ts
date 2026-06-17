@@ -23,6 +23,7 @@ export interface TransferTask {
   id: string
   serverId: string
   serverName: string
+  folderName?: string
   files: Array<{
     localPath: string
     remotePath: string
@@ -46,6 +47,10 @@ export interface TransferProgress {
   transferred: number
   total: number
   speed: number
+  elapsedTime: number
+  estimatedTimeRemaining: number
+  totalTransferred: number
+  totalSize: number
 }
 
 // 定时任务配置
@@ -103,6 +108,7 @@ export interface LogMessage {
 // 上传参数
 export interface UploadParams {
   serverId: string
+  folderName?: string
   files: Array<{
     localPath: string
     remotePath: string

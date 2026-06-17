@@ -13,6 +13,7 @@ import {
   Popconfirm,
   message,
   List,
+  Progress,
 } from 'antd'
 import {
   CloudUploadOutlined,
@@ -35,6 +36,7 @@ interface TransferTask {
   id: string
   serverId: string
   serverName: string
+  folderName?: string
   files: Array<{
     localPath: string
     remotePath: string
@@ -64,6 +66,36 @@ interface ServerOption {
   remotePath: string
 }
 
+interface ProgressInfo {
+  speed: number
+  elapsedTime: number
+  estimatedTimeRemaining: number
+  totalTransferred: number
+  totalSize: number
+}
+
+const formatSpeed = (bytesPerSecond: number): string => {
+  if (bytesPerSecond === 0) return '...'
+  if (bytesPerSecond < 1024) return `${bytesPerSecond} B/s`
+  if (bytesPerSecond < 1024 * 1024) return `${(bytesPerSecond / 1024).toFixed(1)} KB/s`
+  return `${(bytesPerSecond / (1024 * 1024)).toFixed(1)} MB/s`
+}
+
+const formatDurationMs = (ms: number): string => {
+  if (ms < 1000) return `${ms}ms`
+  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`
+  const minutes = Math.floor(ms / 60000)
+  const seconds = Math.round((ms % 60000) / 1000)
+  return `${minutes}m ${seconds}s`
+}
+
+const formatBytesShort = (bytes: number): string => {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
+}
+
 const TransferList: React.FC = () => {
   const [transfers, setTransfers] = useState<TransferTask[]>([])
   const [filteredTransfers, setFilteredTransfers] = useState<TransferTask[]>([])
@@ -73,6 +105,7 @@ const TransferList: React.FC = () => {
     search: '',
     dateRange: null as [dayjs.Dayjs, dayjs.Dayjs] | null,
   })
+  const [progressData, setProgressData] = useState<Record<string, ProgressInfo>>({})
 
   // 上传相关状态
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([])
@@ -81,6 +114,11 @@ const TransferList: React.FC = () => {
   const [servers, setServers] = useState<ServerOption[]>([])
   const [uploading, setUploading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
+  const [folderSelections, setFolderSelections] = useState<Array<{
+    folderPath: string
+    folderName: string
+    files: Array<{ filePath: string; relativePath: string }>
+  }>>([])
 
   useEffect(() => {
     loadTransfers()
@@ -88,8 +126,40 @@ const TransferList: React.FC = () => {
 
     // 监听传输事件
     if (window.electronAPI) {
+      window.electronAPI.onTransferStarted?.((data) => {
+        setTransfers((prev) => {
+          if (prev.find((t) => t.id === data.id)) return prev
+          return [data, ...prev]
+        })
+      })
+
+      window.electronAPI.onTransferProgress?.((data) => {
+        setTransfers((prev) =>
+          prev.map((t) =>
+            t.id === data.id
+              ? { ...t, progress: data.totalSize > 0 ? Math.round((data.totalTransferred / data.totalSize) * 100) : 0, status: 'transferring' }
+              : t
+          )
+        )
+        setProgressData((prev) => ({
+          ...prev,
+          [data.id]: {
+            speed: data.speed,
+            elapsedTime: data.elapsedTime,
+            estimatedTimeRemaining: data.estimatedTimeRemaining,
+            totalTransferred: data.totalTransferred,
+            totalSize: data.totalSize,
+          },
+        }))
+      })
+
       window.electronAPI.onTransferComplete?.((data) => {
-        setTransfers((prev) => [data, ...prev])
+        setTransfers((prev) => [data, ...prev.filter((t) => t.id !== data.id)])
+        setProgressData((prev) => {
+          const next = { ...prev }
+          delete next[data.id]
+          return next
+        })
       })
 
       window.electronAPI.onTransferError?.((data) => {
@@ -98,11 +168,18 @@ const TransferList: React.FC = () => {
             t.id === data.id ? { ...t, status: 'failed', error: data.error } : t
           )
         )
+        setProgressData((prev) => {
+          const next = { ...prev }
+          delete next[data.id]
+          return next
+        })
       })
     }
 
     return () => {
       if (window.electronAPI) {
+        window.electronAPI.removeAllListeners?.('transfer:started')
+        window.electronAPI.removeAllListeners?.('transfer:progress')
         window.electronAPI.removeAllListeners?.('transfer:complete')
         window.electronAPI.removeAllListeners?.('transfer:error')
       }
@@ -198,22 +275,23 @@ const TransferList: React.FC = () => {
     }
   }
 
-  // 选择文件夹进行上传（递归扫描文件夹内所有文件）
+  // 选择文件夹进行上传（递归扫描文件夹内所有文件，保持目录结构）
   const handleSelectFolder = async () => {
     try {
       if (window.electronAPI) {
-        const paths = await window.electronAPI.selectFolderForUpload()
-        if (paths && paths.length > 0) {
-          const newFiles: SelectedFile[] = []
-          for (const filePath of paths) {
-            if (!selectedFiles.find((f) => f.path === filePath)) {
-              const name = filePath.split(/[/\\]/).pop() || filePath
-              newFiles.push({ path: filePath, name, size: 0 })
-            }
-          }
+        const result = await window.electronAPI.selectFolderForUpload()
+        if (result && result.files.length > 0) {
+          setFolderSelections((prev) => [...prev, result])
+          const newFiles: SelectedFile[] = result.files
+            .filter((f) => !selectedFiles.find((sf) => sf.path === f.filePath))
+            .map((f) => ({
+              path: f.filePath,
+              name: f.relativePath,
+              size: 0,
+            }))
           if (newFiles.length > 0) {
             setSelectedFiles((prev) => [...prev, ...newFiles])
-            message.success(`已添加 ${newFiles.length} 个文件`)
+            message.success(`已添加文件夹 "${result.folderName}"，共 ${newFiles.length} 个文件`)
           }
         }
       }
@@ -248,17 +326,35 @@ const TransferList: React.FC = () => {
     setUploading(true)
     try {
       if (window.electronAPI) {
+        // Determine folderName from folder selections
+        const folderName = folderSelections.length === 1
+          ? folderSelections[0].folderName
+          : folderSelections.length > 1
+            ? `${folderSelections.length} 个文件夹`
+            : undefined
+
         await window.electronAPI.uploadFiles({
           serverId: selectedServerId,
-          files: selectedFiles.map((f) => ({
-            localPath: f.path,
-            remotePath: remotePath
-              ? remotePath.replace(/\/$/, '') + '/' + f.name
-              : f.name,
-          })),
+          folderName,
+          files: selectedFiles.map((f) => {
+            // 查找该文件是否来自某个文件夹选择
+            const folder = folderSelections.find((fs) =>
+              fs.files.some((ff) => ff.filePath === f.path)
+            )
+            const nameInPath = folder
+              ? folder.folderName + '/' + f.name
+              : f.name
+            return {
+              localPath: f.path,
+              remotePath: remotePath
+                ? remotePath.replace(/\/$/, '') + '/' + nameInPath
+                : nameInPath,
+            }
+          }),
         })
         message.success(`已添加 ${selectedFiles.length} 个文件到传输队列`)
         setSelectedFiles([])
+        setFolderSelections([])
         loadTransfers()
       }
     } catch (error) {
@@ -329,6 +425,18 @@ const TransferList: React.FC = () => {
     }
   }
 
+  const handleDeleteTransfer = async (id: string) => {
+    try {
+      if (window.electronAPI) {
+        await window.electronAPI.deleteTransfer(id)
+        setTransfers((prev) => prev.filter((t) => t.id !== id))
+        message.success('已删除')
+      }
+    } catch (error) {
+      message.error('删除失败')
+    }
+  }
+
   const handleOpenFile = async (filePath: string) => {
     try {
       if (window.electronAPI) {
@@ -380,13 +488,23 @@ const TransferList: React.FC = () => {
       key: 'files',
       render: (_: unknown, record: TransferTask) => (
         <Space direction="vertical" size={0}>
-          {record.files?.slice(0, 2).map((file, index) => (
-            <Text key={index} ellipsis style={{ maxWidth: 250 }}>
-              {file.fileName}
+          {record.folderName ? (
+            <Text ellipsis style={{ maxWidth: 250 }}>
+              <FolderOpenOutlined style={{ marginRight: 4 }} />
+              {record.folderName}
+              <Text type="secondary"> ({record.files?.length || 0} 个文件)</Text>
             </Text>
-          ))}
-          {record.files && record.files.length > 2 && (
-            <Text type="secondary">等 {record.files.length} 个文件</Text>
+          ) : (
+            <>
+              {record.files?.slice(0, 2).map((file, index) => (
+                <Text key={index} ellipsis style={{ maxWidth: 250 }}>
+                  {file.fileName}
+                </Text>
+              ))}
+              {record.files && record.files.length > 2 && (
+                <Text type="secondary">等 {record.files.length} 个文件</Text>
+              )}
+            </>
           )}
         </Space>
       ),
@@ -394,22 +512,36 @@ const TransferList: React.FC = () => {
     {
       title: '大小',
       key: 'size',
-      width: 100,
+      width: 140,
       render: (_: unknown, record: TransferTask) => {
+        const pd = progressData[record.id]
+        if (pd && (record.status === 'transferring' || record.status === 'connecting')) {
+          return (
+            <Space direction="vertical" size={0}>
+              <Text style={{ fontSize: 12 }}>
+                {formatBytesShort(pd.totalTransferred)} / {formatBytesShort(pd.totalSize)}
+              </Text>
+              <Text type="secondary" style={{ fontSize: 11 }}>
+                {formatSpeed(pd.speed)}
+              </Text>
+            </Space>
+          )
+        }
         const totalSize = record.files?.reduce((sum, f) => sum + f.fileSize, 0) || 0
-        if (totalSize < 1024) return `${totalSize} B`
-        if (totalSize < 1024 * 1024) return `${(totalSize / 1024).toFixed(1)} KB`
-        return `${(totalSize / (1024 * 1024)).toFixed(1)} MB`
+        return formatBytesShort(totalSize)
       },
     },
     {
       title: '状态',
       dataIndex: 'status',
       key: 'status',
-      width: 100,
+      width: 130,
       render: (status: string, record: TransferTask) => (
         <Space direction="vertical" size={0}>
           <Tag color={statusColors[status]}>{statusLabels[status]}</Tag>
+          {(status === 'transferring' || status === 'connecting') && (
+            <Progress percent={record.progress} size="small" status="active" style={{ marginBottom: 0 }} />
+          )}
           {record.error && (
             <Tooltip title={record.error}>
               <Text type="danger" style={{ fontSize: 12 }} ellipsis>
@@ -423,8 +555,24 @@ const TransferList: React.FC = () => {
     {
       title: '耗时',
       key: 'duration',
-      width: 100,
+      width: 120,
       render: (_: unknown, record: TransferTask) => {
+        if (record.status === 'transferring' || record.status === 'connecting') {
+          const pd = progressData[record.id]
+          if (pd) {
+            return (
+              <Space direction="vertical" size={0}>
+                <Text style={{ fontSize: 12 }}>{formatDurationMs(pd.elapsedTime)}</Text>
+                {pd.estimatedTimeRemaining > 0 && (
+                  <Text type="secondary" style={{ fontSize: 11 }}>
+                    剩余 {formatDurationMs(pd.estimatedTimeRemaining)}
+                  </Text>
+                )}
+              </Space>
+            )
+          }
+          return '...'
+        }
         if (!record.startTime || !record.endTime) return '-'
         const duration = record.endTime - record.startTime
         if (duration < 1000) return `${duration}ms`
@@ -435,7 +583,7 @@ const TransferList: React.FC = () => {
     {
       title: '操作',
       key: 'actions',
-      width: 120,
+      width: 160,
       render: (_: unknown, record: TransferTask) => (
         <Space>
           {record.status === 'failed' && (
@@ -456,6 +604,11 @@ const TransferList: React.FC = () => {
               />
             </Tooltip>
           )}
+          <Popconfirm title="确定删除此记录？" onConfirm={() => handleDeleteTransfer(record.id)}>
+            <Tooltip title="删除">
+              <Button type="text" danger icon={<DeleteOutlined />} />
+            </Tooltip>
+          </Popconfirm>
         </Space>
       ),
     },

@@ -14,6 +14,7 @@ export interface ElectronAPI {
   retryTransfer: (id: string) => Promise<void>
   getTransferHistory: () => Promise<TransferTask[]>
   clearHistory: () => Promise<void>
+  deleteTransfer: (id: string) => Promise<void>
 
   // 定时任务
   getSchedules: () => Promise<ScheduleConfig[]>
@@ -30,10 +31,15 @@ export interface ElectronAPI {
   // 系统对话框
   selectFiles: () => Promise<string[]>
   selectFolder: () => Promise<string | null>
-  selectFolderForUpload: () => Promise<string[]>
+  selectFolderForUpload: () => Promise<{
+    folderPath: string
+    folderName: string
+    files: Array<{ filePath: string; relativePath: string }>
+  } | null>
 
   // 事件监听
   onTransferProgress: (callback: (data: TransferProgress) => void) => void
+  onTransferStarted: (callback: (data: TransferTask) => void) => void
   onTransferComplete: (callback: (data: TransferTask) => void) => void
   onTransferError: (callback: (data: { id: string; error: string }) => void) => void
   onLogMessage: (callback: (data: LogMessage) => void) => void
@@ -79,6 +85,7 @@ export interface ServerConfig {
 
 export interface UploadParams {
   serverId: string
+  folderName?: string
   files: Array<{
     localPath: string
     remotePath: string
@@ -89,6 +96,7 @@ export interface TransferTask {
   id: string
   serverId: string
   serverName: string
+  folderName?: string
   files: Array<{
     localPath: string
     remotePath: string
@@ -111,6 +119,10 @@ export interface TransferProgress {
   transferred: number
   total: number
   speed: number
+  elapsedTime: number
+  estimatedTimeRemaining: number
+  totalTransferred: number
+  totalSize: number
 }
 
 export interface ScheduleConfig {
@@ -162,6 +174,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   retryTransfer: (id: string) => ipcRenderer.invoke('transfer:retry', id),
   getTransferHistory: () => ipcRenderer.invoke('transfer:history'),
   clearHistory: () => ipcRenderer.invoke('transfer:clear-history'),
+  deleteTransfer: (id: string) => ipcRenderer.invoke('transfer:delete', id),
 
   // 定时任务
   getSchedules: () => ipcRenderer.invoke('schedule:get-all'),
@@ -184,6 +197,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 事件监听
   onTransferProgress: (callback: (data: TransferProgress) => void) => {
     ipcRenderer.on('transfer:progress', (_, data) => callback(data))
+  },
+  onTransferStarted: (callback: (data: TransferTask) => void) => {
+    ipcRenderer.on('transfer:started', (_, data) => callback(data))
   },
   onTransferComplete: (callback: (data: TransferTask) => void) => {
     ipcRenderer.on('transfer:complete', (_, data) => callback(data))

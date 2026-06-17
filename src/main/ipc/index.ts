@@ -92,6 +92,11 @@ export function registerTransferIPC(transferManager: TransferManager, configStor
     configStore.clearTransfers()
     return { success: true }
   })
+
+  ipcMain.handle('transfer:delete', async (_, id) => {
+    configStore.deleteTransfer(id)
+    return { success: true }
+  })
 }
 
 export function registerDialogIPC(mainWindow: BrowserWindow) {
@@ -122,7 +127,7 @@ export function registerDialogIPC(mainWindow: BrowserWindow) {
       properties: ['openDirectory'],
     })
     if (result.canceled || result.filePaths.length === 0) {
-      return []
+      return null
     }
     const folderPath = result.filePaths[0]
     const files = await glob('**/*', {
@@ -131,7 +136,14 @@ export function registerDialogIPC(mainWindow: BrowserWindow) {
       onlyFiles: true,
       ignore: ['**/node_modules/**', '**/.git/**'],
     })
-    return files
+    return {
+      folderPath,
+      folderName: path.basename(folderPath),
+      files: files.map((filePath) => ({
+        filePath,
+        relativePath: path.relative(folderPath, filePath),
+      })),
+    }
   })
 }
 

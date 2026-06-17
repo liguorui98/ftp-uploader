@@ -56,6 +56,7 @@ export interface TransferTask {
   id: string
   serverId: string
   serverName: string
+  folderName?: string
   files: Array<{
     localPath: string
     remotePath: string
@@ -280,6 +281,15 @@ export class ConfigStore {
       transfers[index] = { ...transfers[index], ...updates }
       this.store.set('transfers', transfers)
     }
+  }
+
+  deleteTransfer(id: string): void {
+    const transfers = this.store.get('transfers', [])
+    this.store.set(
+      'transfers',
+      transfers.filter((t) => t.id !== id)
+    )
+    log.info(`传输记录已删除: ${id}`)
   }
 
   clearTransfers(): void {
