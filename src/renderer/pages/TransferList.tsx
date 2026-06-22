@@ -11,7 +11,7 @@ import {
   Typography,
   Tooltip,
   Popconfirm,
-  message,
+  App,
   List,
   Progress,
 } from 'antd'
@@ -97,6 +97,7 @@ const formatBytesShort = (bytes: number): string => {
 }
 
 const TransferList: React.FC = () => {
+  const { message } = App.useApp()
   const [transfers, setTransfers] = useState<TransferTask[]>([])
   const [filteredTransfers, setFilteredTransfers] = useState<TransferTask[]>([])
   const [loading, setLoading] = useState(false)
@@ -124,64 +125,71 @@ const TransferList: React.FC = () => {
     loadTransfers()
     loadServers()
 
-    // 监听传输事件
+    // 命名 handler 以便 removeListener 精确移除
+    const onStarted = (data: any) => {
+      setTransfers((prev) => {
+        if (prev.find((t) => t.id === data.id)) return prev
+        return [data, ...prev]
+      })
+    }
+
+    const onProgress = (data: any) => {
+      setTransfers((prev) =>
+        prev.map((t) =>
+          t.id === data.id
+            ? { ...t, progress: data.totalSize > 0 ? Math.round((data.totalTransferred / data.totalSize) * 100) : 0, status: 'transferring' }
+            : t
+        )
+      )
+      setProgressData((prev) => ({
+        ...prev,
+        [data.id]: {
+          speed: data.speed,
+          elapsedTime: data.elapsedTime,
+          estimatedTimeRemaining: data.estimatedTimeRemaining,
+          totalTransferred: data.totalTransferred,
+          totalSize: data.totalSize,
+        },
+      }))
+    }
+
+    const onComplete = (data: any) => {
+      setTransfers((prev) => [data, ...prev.filter((t) => t.id !== data.id)])
+      setProgressData((prev) => {
+        const next = { ...prev }
+        delete next[data.id]
+        return next
+      })
+      loadTransfers()
+    }
+
+    const onError = (data: any) => {
+      setTransfers((prev) =>
+        prev.map((t) =>
+          t.id === data.id ? { ...t, status: 'failed', error: data.error } : t
+        )
+      )
+      setProgressData((prev) => {
+        const next = { ...prev }
+        delete next[data.id]
+        return next
+      })
+      loadTransfers()
+    }
+
     if (window.electronAPI) {
-      window.electronAPI.onTransferStarted?.((data) => {
-        setTransfers((prev) => {
-          if (prev.find((t) => t.id === data.id)) return prev
-          return [data, ...prev]
-        })
-      })
-
-      window.electronAPI.onTransferProgress?.((data) => {
-        setTransfers((prev) =>
-          prev.map((t) =>
-            t.id === data.id
-              ? { ...t, progress: data.totalSize > 0 ? Math.round((data.totalTransferred / data.totalSize) * 100) : 0, status: 'transferring' }
-              : t
-          )
-        )
-        setProgressData((prev) => ({
-          ...prev,
-          [data.id]: {
-            speed: data.speed,
-            elapsedTime: data.elapsedTime,
-            estimatedTimeRemaining: data.estimatedTimeRemaining,
-            totalTransferred: data.totalTransferred,
-            totalSize: data.totalSize,
-          },
-        }))
-      })
-
-      window.electronAPI.onTransferComplete?.((data) => {
-        setTransfers((prev) => [data, ...prev.filter((t) => t.id !== data.id)])
-        setProgressData((prev) => {
-          const next = { ...prev }
-          delete next[data.id]
-          return next
-        })
-      })
-
-      window.electronAPI.onTransferError?.((data) => {
-        setTransfers((prev) =>
-          prev.map((t) =>
-            t.id === data.id ? { ...t, status: 'failed', error: data.error } : t
-          )
-        )
-        setProgressData((prev) => {
-          const next = { ...prev }
-          delete next[data.id]
-          return next
-        })
-      })
+      window.electronAPI.onTransferStarted?.(onStarted)
+      window.electronAPI.onTransferProgress?.(onProgress)
+      window.electronAPI.onTransferComplete?.(onComplete)
+      window.electronAPI.onTransferError?.(onError)
     }
 
     return () => {
       if (window.electronAPI) {
-        window.electronAPI.removeAllListeners?.('transfer:started')
-        window.electronAPI.removeAllListeners?.('transfer:progress')
-        window.electronAPI.removeAllListeners?.('transfer:complete')
-        window.electronAPI.removeAllListeners?.('transfer:error')
+        window.electronAPI.removeListener?.('transfer:started', onStarted)
+        window.electronAPI.removeListener?.('transfer:progress', onProgress)
+        window.electronAPI.removeListener?.('transfer:complete', onComplete)
+        window.electronAPI.removeListener?.('transfer:error', onError)
       }
     }
   }, [])
@@ -618,7 +626,7 @@ const TransferList: React.FC = () => {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <Title level={4}>
-          <CloudUploadOutlined /> 传输历史
+          <CloudUploadOutlined /> 手动传输
         </Title>
         <Space>
           <Button icon={<ReloadOutlined />} onClick={loadTransfers}>
@@ -765,7 +773,7 @@ const TransferList: React.FC = () => {
       </Card>
 
       {/* 传输列表 */}
-      <Card>
+      <Card title="传输历史">
         <Table
           columns={columns}
           dataSource={filteredTransfers}

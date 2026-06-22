@@ -44,6 +44,7 @@ export interface ElectronAPI {
   onTransferError: (callback: (data: { id: string; error: string }) => void) => void
   onLogMessage: (callback: (data: LogMessage) => void) => void
   removeAllListeners: (channel: string) => void
+  removeListener: (channel: string, callback: (...args: unknown[]) => void) => void
 
   // 应用信息
   getAppVersion: () => Promise<string>
@@ -58,6 +59,12 @@ export interface ElectronAPI {
     platform: string
   }>
   getPlatform: () => string
+
+  // 设置
+  getSettings: () => Promise<Record<string, unknown>>
+  updateSettings: (settings: Record<string, unknown>) => Promise<void>
+  exportConfig: () => Promise<string>
+  importConfig: (jsonStr: string) => Promise<boolean>
 
   // 系统功能
   openFilePath: (filePath: string) => Promise<{ success: boolean; error?: string }>
@@ -160,6 +167,9 @@ export interface LogMessage {
   timestamp: number
 }
 
+// 监听器包装映射，用于 removeListener
+const listenerWrappers = new Map<Function, Function>()
+
 // 通过contextBridge暴露API
 contextBridge.exposeInMainWorld('electronAPI', {
   // 服务器配置
@@ -196,28 +206,51 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // 事件监听
   onTransferProgress: (callback: (data: TransferProgress) => void) => {
-    ipcRenderer.on('transfer:progress', (_, data) => callback(data))
+    const wrapper = (_: unknown, data: TransferProgress) => callback(data)
+    listenerWrappers.set(callback, wrapper)
+    ipcRenderer.on('transfer:progress', wrapper)
   },
   onTransferStarted: (callback: (data: TransferTask) => void) => {
-    ipcRenderer.on('transfer:started', (_, data) => callback(data))
+    const wrapper = (_: unknown, data: TransferTask) => callback(data)
+    listenerWrappers.set(callback, wrapper)
+    ipcRenderer.on('transfer:started', wrapper)
   },
   onTransferComplete: (callback: (data: TransferTask) => void) => {
-    ipcRenderer.on('transfer:complete', (_, data) => callback(data))
+    const wrapper = (_: unknown, data: TransferTask) => callback(data)
+    listenerWrappers.set(callback, wrapper)
+    ipcRenderer.on('transfer:complete', wrapper)
   },
   onTransferError: (callback: (data: { id: string; error: string }) => void) => {
-    ipcRenderer.on('transfer:error', (_, data) => callback(data))
+    const wrapper = (_: unknown, data: { id: string; error: string }) => callback(data)
+    listenerWrappers.set(callback, wrapper)
+    ipcRenderer.on('transfer:error', wrapper)
   },
   onLogMessage: (callback: (data: LogMessage) => void) => {
-    ipcRenderer.on('log:message', (_, data) => callback(data))
+    const wrapper = (_: unknown, data: LogMessage) => callback(data)
+    listenerWrappers.set(callback, wrapper)
+    ipcRenderer.on('log:message', wrapper)
   },
   removeAllListeners: (channel: string) => {
     ipcRenderer.removeAllListeners(channel)
+  },
+  removeListener: (channel: string, callback: (...args: unknown[]) => void) => {
+    const wrapper = listenerWrappers.get(callback)
+    if (wrapper) {
+      ipcRenderer.removeListener(channel, wrapper as (...args: unknown[]) => void)
+      listenerWrappers.delete(callback)
+    }
   },
 
   // 应用信息
   getAppVersion: () => ipcRenderer.invoke('app:version'),
   getAppInfo: () => ipcRenderer.invoke('app:get-info'),
   getPlatform: () => process.platform,
+
+  // 设置
+  getSettings: () => ipcRenderer.invoke('config:get-settings'),
+  updateSettings: (settings: Record<string, unknown>) => ipcRenderer.invoke('config:update-settings', settings),
+  exportConfig: () => ipcRenderer.invoke('config:export'),
+  importConfig: (jsonStr: string) => ipcRenderer.invoke('config:import', jsonStr),
 
   // 系统功能
   openFilePath: (filePath: string) => ipcRenderer.invoke('shell:open-path', filePath),

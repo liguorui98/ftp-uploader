@@ -11,7 +11,7 @@ import {
   List,
   Tag,
   Modal,
-  message,
+  App,
   Typography,
   Tooltip,
   Popconfirm,
@@ -49,6 +49,7 @@ interface ServerConfig {
 }
 
 const ServerSettings: React.FC = () => {
+  const { message } = App.useApp()
   const [servers, setServers] = useState<ServerConfig[]>([])
   const [editingServer, setEditingServer] = useState<ServerConfig | null>(null)
   const [isModalVisible, setIsModalVisible] = useState(false)

@@ -11,7 +11,7 @@ import {
   List,
   Tag,
   Modal,
-  message,
+  App,
   Typography,
   Tooltip,
   Popconfirm,
@@ -47,6 +47,7 @@ interface ServerConfig {
 }
 
 const FileWatcher: React.FC = () => {
+  const { message } = App.useApp()
   const [watchers, setWatchers] = useState<WatcherConfig[]>([])
   const [servers, setServers] = useState<ServerConfig[]>([])
   const [editingWatcher, setEditingWatcher] = useState<WatcherConfig | null>(null)
@@ -266,13 +267,15 @@ const FileWatcher: React.FC = () => {
             <Input placeholder="例如：数据文件监控" />
           </Form.Item>
 
-          <Form.Item
-            name="watchPath"
-            label="监控文件夹路径"
-            rules={[{ required: true, message: '请选择监控路径' }]}
-          >
+          <Form.Item label="监控文件夹路径" required>
             <Space.Compact style={{ width: '100%' }}>
-              <Input placeholder="选择要监控的文件夹" />
+              <Form.Item
+                name="watchPath"
+                noStyle
+                rules={[{ required: true, message: '请选择监控路径' }]}
+              >
+                <Input placeholder="选择要监控的文件夹" />
+              </Form.Item>
               <Button onClick={() => handleSelectFolder('watchPath')}>选择</Button>
             </Space.Compact>
           </Form.Item>
@@ -291,13 +294,15 @@ const FileWatcher: React.FC = () => {
             </Select>
           </Form.Item>
 
-          <Form.Item
-            name="remotePath"
-            label="远程目标路径"
-            rules={[{ required: true, message: '请输入远程路径' }]}
-          >
+          <Form.Item label="远程目标路径" required>
             <Space.Compact style={{ width: '100%' }}>
-              <Input placeholder="/uploads/watched" />
+              <Form.Item
+                name="remotePath"
+                noStyle
+                rules={[{ required: true, message: '请输入远程路径' }]}
+              >
+                <Input placeholder="/uploads/watched" />
+              </Form.Item>
               <Button onClick={() => handleSelectFolder('remotePath')}>选择</Button>
             </Space.Compact>
           </Form.Item>
@@ -319,13 +324,15 @@ const FileWatcher: React.FC = () => {
             label="防抖时间（毫秒）"
             extra="等待文件写入完成后再上传"
           >
-            <InputNumber
-              min={500}
-              max={30000}
-              step={500}
-              style={{ width: '100%' }}
-              addonAfter="毫秒"
-            />
+            <Space.Compact style={{ width: '100%' }}>
+              <InputNumber
+                min={500}
+                max={30000}
+                step={500}
+                style={{ flex: 1 }}
+              />
+              <span style={{ padding: '0 11px', lineHeight: '30px', background: '#fafafa', border: '1px solid #d9d9d9', borderLeft: 0, borderRadius: '0 6px 6px 0' }}>毫秒</span>
+            </Space.Compact>
           </Form.Item>
         </Form>
       </Modal>

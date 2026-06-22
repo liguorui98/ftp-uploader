@@ -11,7 +11,7 @@ import {
   List,
   Tag,
   Modal,
-  message,
+  App,
   Typography,
   TimePicker,
   Tooltip,
@@ -56,6 +56,7 @@ interface ServerConfig {
 }
 
 const ScheduleConfig: React.FC = () => {
+  const { message } = App.useApp()
   const [schedules, setSchedules] = useState<ScheduleConfig[]>([])
   const [servers, setServers] = useState<ServerConfig[]>([])
   const [editingSchedule, setEditingSchedule] = useState<ScheduleConfig | null>(null)
@@ -96,6 +97,7 @@ const ScheduleConfig: React.FC = () => {
     setEditingSchedule(schedule)
     form.setFieldsValue({
       ...schedule,
+      sourcePaths: Array.isArray(schedule.sourcePaths) ? schedule.sourcePaths.join('\n') : schedule.sourcePaths,
       dailyTime: schedule.dailyTime ? dayjs(schedule.dailyTime, 'HH:mm') : undefined,
       weeklyTime: schedule.weeklyTime ? dayjs(schedule.weeklyTime, 'HH:mm') : undefined,
     })
@@ -167,6 +169,7 @@ const ScheduleConfig: React.FC = () => {
       form.resetFields()
     } catch (error) {
       console.error('表单验证失败:', error)
+      message.error('保存失败: ' + (error instanceof Error ? error.message : String(error)))
     }
   }
 
@@ -375,13 +378,15 @@ const ScheduleConfig: React.FC = () => {
                   label: '间隔模式',
                   children: (
                     <Form.Item name="intervalMinutes" noStyle>
-                      <InputNumber
-                        min={1}
-                        max={1440}
-                        placeholder="分钟"
-                        addonAfter="分钟"
-                        style={{ width: '100%' }}
-                      />
+                      <Space.Compact style={{ width: '100%' }}>
+                        <InputNumber
+                          min={1}
+                          max={1440}
+                          placeholder="分钟"
+                          style={{ flex: 1 }}
+                        />
+                        <span style={{ padding: '0 11px', lineHeight: '30px', background: '#fafafa', border: '1px solid #d9d9d9', borderLeft: 0, borderRadius: '0 6px 6px 0' }}>分钟</span>
+                      </Space.Compact>
                     </Form.Item>
                   ),
                 },

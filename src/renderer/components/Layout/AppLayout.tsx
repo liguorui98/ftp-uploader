@@ -22,6 +22,7 @@ const AppLayout: React.FC = () => {
   const location = useLocation()
   const [collapsed, setCollapsed] = useState(false)
   const [queueStatus, setQueueStatus] = useState({ queued: 0, active: 0, isPaused: false })
+  const [serverCount, setServerCount] = useState(0)
 
   // 菜单项
   const menuItems = [
@@ -63,7 +64,26 @@ const AppLayout: React.FC = () => {
     },
   ]
 
-  // 获取队列状态
+  // 获取服务器数量
+  useEffect(() => {
+    const fetchServerCount = async () => {
+      try {
+        if (window.electronAPI) {
+          const servers = await window.electronAPI.getServers?.()
+          if (Array.isArray(servers)) {
+            setServerCount(servers.length)
+          }
+        }
+      } catch (error) {
+        // 忽略错误
+      }
+    }
+    fetchServerCount()
+    const serverInterval = setInterval(fetchServerCount, 10000)
+    return () => clearInterval(serverInterval)
+  }, [])
+
+  // 获取队列状态 + 监听传输事件实时更新
   useEffect(() => {
     const fetchStatus = async () => {
       try {
@@ -81,7 +101,37 @@ const AppLayout: React.FC = () => {
     fetchStatus()
     const interval = setInterval(fetchStatus, 2000)
 
-    return () => clearInterval(interval)
+    // 命名 handler 以便 removeListener 精确移除
+    const onStarted = () => {
+      setQueueStatus((prev) => ({ ...prev, active: prev.active + 1 }))
+    }
+    const onComplete = () => {
+      setQueueStatus((prev) => ({
+        ...prev,
+        active: Math.max(0, prev.active - 1),
+      }))
+    }
+    const onError = () => {
+      setQueueStatus((prev) => ({
+        ...prev,
+        active: Math.max(0, prev.active - 1),
+      }))
+    }
+
+    if (window.electronAPI) {
+      window.electronAPI.onTransferStarted?.(onStarted)
+      window.electronAPI.onTransferComplete?.(onComplete)
+      window.electronAPI.onTransferError?.(onError)
+    }
+
+    return () => {
+      clearInterval(interval)
+      if (window.electronAPI) {
+        window.electronAPI.removeListener?.('transfer:started', onStarted)
+        window.electronAPI.removeListener?.('transfer:complete', onComplete)
+        window.electronAPI.removeListener?.('transfer:error', onError)
+      }
+    }
   }, [])
 
   return (
@@ -143,7 +193,7 @@ const AppLayout: React.FC = () => {
       </Layout>
 
       {/* 状态栏 */}
-      <StatusBar queueStatus={queueStatus} />
+      <StatusBar queueStatus={queueStatus} serverCount={serverCount} />
     </Layout>
   )
 }

@@ -68,74 +68,80 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     fetchData()
 
-    // 监听传输事件
-    if (window.electronAPI) {
-      window.electronAPI.onTransferProgress?.((data) => {
-        const progress = data.totalSize > 0 ? Math.round((data.totalTransferred / data.totalSize) * 100) : 0
-        setActiveTransfers((prev) =>
-          prev.map((t) =>
-            t.id === data.id ? { ...t, progress } : t
-          )
+    // 命名 handler 以便 removeListener 精确移除
+    const onProgress = (data: any) => {
+      const progress = data.totalSize > 0 ? Math.round((data.totalTransferred / data.totalSize) * 100) : 0
+      setActiveTransfers((prev) =>
+        prev.map((t) =>
+          t.id === data.id ? { ...t, progress } : t
         )
-        setProgressData((prev) => ({
-          ...prev,
-          [data.id]: {
-            speed: data.speed,
-            elapsedTime: data.elapsedTime,
-            estimatedTimeRemaining: data.estimatedTimeRemaining,
-            totalTransferred: data.totalTransferred,
-            totalSize: data.totalSize,
-          },
-        }))
-      })
+      )
+      setProgressData((prev) => ({
+        ...prev,
+        [data.id]: {
+          speed: data.speed,
+          elapsedTime: data.elapsedTime,
+          estimatedTimeRemaining: data.estimatedTimeRemaining,
+          totalTransferred: data.totalTransferred,
+          totalSize: data.totalSize,
+        },
+      }))
+    }
 
-      window.electronAPI.onTransferStarted?.((data) => {
-        setActiveTransfers((prev) => {
-          if (prev.find((t) => t.id === data.id)) return prev
-          return [...prev, data]
-        })
-        setStats((prev) => ({ ...prev, active: prev.active + 1 }))
+    const onStarted = (data: any) => {
+      setActiveTransfers((prev) => {
+        if (prev.find((t) => t.id === data.id)) return prev
+        return [...prev, data]
       })
+      setStats((prev) => ({ ...prev, active: prev.active + 1 }))
+    }
 
-      window.electronAPI.onTransferComplete?.((data) => {
-        setActiveTransfers((prev) => prev.filter((t) => t.id !== data.id))
-        setProgressData((prev) => {
-          const next = { ...prev }
-          delete next[data.id]
-          return next
-        })
-        setRecentTransfers((prev) => [data, ...prev.slice(0, 9)])
-        setStats((prev) => ({
-          ...prev,
-          success: prev.success + 1,
-          total: prev.total + 1,
-          active: Math.max(0, prev.active - 1),
-        }))
+    const onComplete = (data: any) => {
+      setActiveTransfers((prev) => prev.filter((t) => t.id !== data.id))
+      setProgressData((prev) => {
+        const next = { ...prev }
+        delete next[data.id]
+        return next
       })
+      setRecentTransfers((prev) => [data, ...prev.slice(0, 9)])
+      setStats((prev) => ({
+        ...prev,
+        success: prev.success + 1,
+        total: prev.total + 1,
+        active: Math.max(0, prev.active - 1),
+      }))
+      fetchData()
+    }
 
-      window.electronAPI.onTransferError?.((data) => {
-        setActiveTransfers((prev) => prev.filter((t) => t.id !== data.id))
-        setProgressData((prev) => {
-          const next = { ...prev }
-          delete next[data.id]
-          return next
-        })
-        setStats((prev) => ({
-          ...prev,
-          failed: prev.failed + 1,
-          total: prev.total + 1,
-          active: Math.max(0, prev.active - 1),
-        }))
+    const onError = (data: any) => {
+      setActiveTransfers((prev) => prev.filter((t) => t.id !== data.id))
+      setProgressData((prev) => {
+        const next = { ...prev }
+        delete next[data.id]
+        return next
       })
+      setStats((prev) => ({
+        ...prev,
+        failed: prev.failed + 1,
+        total: prev.total + 1,
+        active: Math.max(0, prev.active - 1),
+      }))
+      fetchData()
+    }
+
+    if (window.electronAPI) {
+      window.electronAPI.onTransferProgress?.(onProgress)
+      window.electronAPI.onTransferStarted?.(onStarted)
+      window.electronAPI.onTransferComplete?.(onComplete)
+      window.electronAPI.onTransferError?.(onError)
     }
 
     return () => {
-      // 清理监听器
       if (window.electronAPI) {
-        window.electronAPI.removeAllListeners?.('transfer:progress')
-        window.electronAPI.removeAllListeners?.('transfer:started')
-        window.electronAPI.removeAllListeners?.('transfer:complete')
-        window.electronAPI.removeAllListeners?.('transfer:error')
+        window.electronAPI.removeListener?.('transfer:progress', onProgress)
+        window.electronAPI.removeListener?.('transfer:started', onStarted)
+        window.electronAPI.removeListener?.('transfer:complete', onComplete)
+        window.electronAPI.removeListener?.('transfer:error', onError)
       }
     }
   }, [])

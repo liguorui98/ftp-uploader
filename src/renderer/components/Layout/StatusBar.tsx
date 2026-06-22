@@ -14,17 +14,20 @@ interface StatusBarProps {
     active: number
     isPaused: boolean
   }
+  serverCount: number
 }
 
-const StatusBar: React.FC<StatusBarProps> = ({ queueStatus }) => {
+const StatusBar: React.FC<StatusBarProps> = ({ queueStatus, serverCount }) => {
   return (
     <div className="statusbar">
       <Space size={16}>
         {/* 连接状态 */}
         <Tooltip title="服务器连接状态">
           <Space size={4}>
-            <Badge status="success" />
-            <Text type="secondary">已连接</Text>
+            <Badge status={serverCount > 0 ? 'success' : 'default'} />
+            <Text type="secondary">
+              {serverCount > 0 ? '已连接' : '未配置'}
+            </Text>
           </Space>
         </Tooltip>
 
@@ -50,7 +53,9 @@ const StatusBar: React.FC<StatusBarProps> = ({ queueStatus }) => {
         <Tooltip title="已配置的服务器数量">
           <Space size={4}>
             <CloudServerOutlined style={{ color: '#666' }} />
-            <Text type="secondary">服务器</Text>
+            <Text type="secondary">
+              {serverCount > 0 ? `服务器 ${serverCount}` : '服务器'}
+            </Text>
           </Space>
         </Tooltip>
       </Space>

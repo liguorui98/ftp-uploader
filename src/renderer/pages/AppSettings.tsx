@@ -10,7 +10,7 @@ import {
   Space,
   Typography,
   Divider,
-  message,
+  App,
   Tabs,
   Upload,
   Row,
@@ -53,6 +53,7 @@ interface AppInfo {
 }
 
 const AppSettings: React.FC = () => {
+  const { message } = App.useApp()
   const [settings, setSettings] = useState<AppSettings>({
     maxConcurrency: 3,
     maxRetries: 3,
@@ -160,7 +161,7 @@ const AppSettings: React.FC = () => {
       key: 'general',
       label: '通用设置',
       children: (
-        <Form layout="vertical">
+        <div>
           <Form.Item name="language" label="语言">
             <Select>
               <Option value="zh-CN">简体中文</Option>
@@ -187,14 +188,14 @@ const AppSettings: React.FC = () => {
           <Form.Item name="notifications" label="系统通知" valuePropName="checked">
             <Switch />
           </Form.Item>
-        </Form>
+        </div>
       ),
     },
     {
       key: 'transfer',
       label: '传输设置',
       children: (
-        <Form layout="vertical">
+        <div>
           <Form.Item name="maxConcurrency" label="最大并发传输数">
             <InputNumber min={1} max={10} style={{ width: '100%' }} />
           </Form.Item>
@@ -210,14 +211,14 @@ const AppSettings: React.FC = () => {
           <Form.Item name="defaultRemotePath" label="默认远程路径">
             <Input placeholder="/uploads" />
           </Form.Item>
-        </Form>
+        </div>
       ),
     },
     {
       key: 'advanced',
       label: '高级设置',
       children: (
-        <Form layout="vertical">
+        <div>
           <Form.Item name="logLevel" label="日志级别">
             <Select>
               <Option value="debug">Debug</Option>
@@ -246,7 +247,7 @@ const AppSettings: React.FC = () => {
               <Button icon={<UploadOutlined />}>导入配置</Button>
             </Upload>
           </Space>
-        </Form>
+        </div>
       ),
     },
     {
