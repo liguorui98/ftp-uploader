@@ -80,7 +80,7 @@ class FTPClient implements TransferClient {
   }
 
   async upload(localPath: string, remotePath: string, onProgress?: ProgressCallback): Promise<void> {
-    if (!this.client.closed === false) {
+    if (this.client.closed) {
       throw new Error('FTP客户端未连接')
     }
 
@@ -123,7 +123,7 @@ class FTPClient implements TransferClient {
   }
 
   async download(remotePath: string, localPath: string, onProgress?: ProgressCallback): Promise<void> {
-    if (!this.client.closed === false) {
+    if (this.client.closed) {
       throw new Error('FTP客户端未连接')
     }
 
@@ -148,7 +148,7 @@ class FTPClient implements TransferClient {
   }
 
   async list(remotePath: string): Promise<FileInfo[]> {
-    if (!this.client.closed === false) {
+    if (this.client.closed) {
       throw new Error('FTP客户端未连接')
     }
 
@@ -169,7 +169,7 @@ class FTPClient implements TransferClient {
   }
 
   async mkdir(remotePath: string, recursive: boolean = true): Promise<void> {
-    if (!this.client.closed === false) {
+    if (this.client.closed) {
       throw new Error('FTP客户端未连接')
     }
 

@@ -83,7 +83,7 @@ const AppLayout: React.FC = () => {
     return () => clearInterval(serverInterval)
   }, [])
 
-  // 获取队列状态 + 监听传输事件实时更新
+  // 获取队列状态（轮询，2秒间隔）
   useEffect(() => {
     const fetchStatus = async () => {
       try {
@@ -100,38 +100,7 @@ const AppLayout: React.FC = () => {
 
     fetchStatus()
     const interval = setInterval(fetchStatus, 2000)
-
-    // 命名 handler 以便 removeListener 精确移除
-    const onStarted = () => {
-      setQueueStatus((prev) => ({ ...prev, active: prev.active + 1 }))
-    }
-    const onComplete = () => {
-      setQueueStatus((prev) => ({
-        ...prev,
-        active: Math.max(0, prev.active - 1),
-      }))
-    }
-    const onError = () => {
-      setQueueStatus((prev) => ({
-        ...prev,
-        active: Math.max(0, prev.active - 1),
-      }))
-    }
-
-    if (window.electronAPI) {
-      window.electronAPI.onTransferStarted?.(onStarted)
-      window.electronAPI.onTransferComplete?.(onComplete)
-      window.electronAPI.onTransferError?.(onError)
-    }
-
-    return () => {
-      clearInterval(interval)
-      if (window.electronAPI) {
-        window.electronAPI.removeListener?.('transfer:started', onStarted)
-        window.electronAPI.removeListener?.('transfer:complete', onComplete)
-        window.electronAPI.removeListener?.('transfer:error', onError)
-      }
-    }
+    return () => clearInterval(interval)
   }, [])
 
   return (

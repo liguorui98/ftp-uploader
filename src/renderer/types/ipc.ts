@@ -58,12 +58,12 @@ export interface ElectronAPI {
   exportConfig: () => Promise<string>
   importConfig: (jsonStr: string) => Promise<boolean>
 
-  // 事件监听
-  onTransferProgress: (callback: (data: TransferProgress) => void) => void
-  onTransferStarted: (callback: (data: TransferTask) => void) => void
-  onTransferComplete: (callback: (data: TransferTask) => void) => void
-  onTransferError: (callback: (data: { id: string; error: string }) => void) => void
-  onLogMessage: (callback: (data: LogMessage) => void) => void
+  // 事件监听（返回 cleanup 函数）
+  onTransferProgress: (callback: (data: TransferProgress) => void) => () => void
+  onTransferStarted: (callback: (data: TransferTask) => void) => () => void
+  onTransferComplete: (callback: (data: TransferTask) => void) => () => void
+  onTransferError: (callback: (data: { id: string; error: string }) => void) => () => void
+  onLogMessage: (callback: (data: LogMessage) => void) => () => void
   removeAllListeners: (channel: string) => void
 
   // 应用信息

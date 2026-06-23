@@ -151,9 +151,10 @@ export class ConfigStore {
   // 服务器配置
   getServers(): ServerConfig[] {
     const servers = this.store.get('servers', [])
-    // 解密密码
+    // 解密密码，防御性清理字段
     return servers.map((server) => ({
       ...server,
+      name: typeof server.name === 'string' ? server.name : String(server.name || server.id || '未知服务器'),
       password: this.decryptPassword(server.encryptedPassword || server.password),
     }))
   }
@@ -296,9 +297,10 @@ export class ConfigStore {
     this.store.set('transfers', [])
   }
 
-  // 设置
+  // 设置（与默认值合并，确保缺少的字段有默认值）
   getSettings(): AppConfig['settings'] {
-    return this.store.get('settings', defaultConfig.settings)
+    const stored = this.store.get('settings', {})
+    return { ...defaultConfig.settings, ...stored }
   }
 
   updateSettings(updates: Partial<AppConfig['settings']>): void {

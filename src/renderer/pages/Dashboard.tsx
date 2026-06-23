@@ -129,20 +129,16 @@ const Dashboard: React.FC = () => {
       fetchData()
     }
 
+    const cleanups: Array<() => void> = []
     if (window.electronAPI) {
-      window.electronAPI.onTransferProgress?.(onProgress)
-      window.electronAPI.onTransferStarted?.(onStarted)
-      window.electronAPI.onTransferComplete?.(onComplete)
-      window.electronAPI.onTransferError?.(onError)
+      cleanups.push(window.electronAPI.onTransferProgress?.(onProgress) || (() => {}))
+      cleanups.push(window.electronAPI.onTransferStarted?.(onStarted) || (() => {}))
+      cleanups.push(window.electronAPI.onTransferComplete?.(onComplete) || (() => {}))
+      cleanups.push(window.electronAPI.onTransferError?.(onError) || (() => {}))
     }
 
     return () => {
-      if (window.electronAPI) {
-        window.electronAPI.removeListener?.('transfer:progress', onProgress)
-        window.electronAPI.removeListener?.('transfer:started', onStarted)
-        window.electronAPI.removeListener?.('transfer:complete', onComplete)
-        window.electronAPI.removeListener?.('transfer:error', onError)
-      }
+      cleanups.forEach((cleanup) => cleanup())
     }
   }, [])
 

@@ -13,6 +13,9 @@ export interface ElectronAPI {
   cancelTransfer: (id: string) => Promise<void>
   retryTransfer: (id: string) => Promise<void>
   getTransferHistory: () => Promise<TransferTask[]>
+  getQueueStatus: () => Promise<{ queued: number; active: number; isPaused: boolean }>
+  pauseAll: () => Promise<void>
+  resumeAll: () => Promise<void>
   clearHistory: () => Promise<void>
   deleteTransfer: (id: string) => Promise<void>
 
@@ -37,14 +40,13 @@ export interface ElectronAPI {
     files: Array<{ filePath: string; relativePath: string }>
   } | null>
 
-  // 事件监听
-  onTransferProgress: (callback: (data: TransferProgress) => void) => void
-  onTransferStarted: (callback: (data: TransferTask) => void) => void
-  onTransferComplete: (callback: (data: TransferTask) => void) => void
-  onTransferError: (callback: (data: { id: string; error: string }) => void) => void
-  onLogMessage: (callback: (data: LogMessage) => void) => void
+  // 事件监听（返回 cleanup 函数）
+  onTransferProgress: (callback: (data: TransferProgress) => void) => () => void
+  onTransferStarted: (callback: (data: TransferTask) => void) => () => void
+  onTransferComplete: (callback: (data: TransferTask) => void) => () => void
+  onTransferError: (callback: (data: { id: string; error: string }) => void) => () => void
+  onLogMessage: (callback: (data: LogMessage) => void) => () => void
   removeAllListeners: (channel: string) => void
-  removeListener: (channel: string, callback: (...args: unknown[]) => void) => void
 
   // 应用信息
   getAppVersion: () => Promise<string>
@@ -167,9 +169,6 @@ export interface LogMessage {
   timestamp: number
 }
 
-// 监听器包装映射，用于 removeListener
-const listenerWrappers = new Map<Function, Function>()
-
 // 通过contextBridge暴露API
 contextBridge.exposeInMainWorld('electronAPI', {
   // 服务器配置
@@ -183,6 +182,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   cancelTransfer: (id: string) => ipcRenderer.invoke('transfer:cancel', id),
   retryTransfer: (id: string) => ipcRenderer.invoke('transfer:retry', id),
   getTransferHistory: () => ipcRenderer.invoke('transfer:history'),
+  getQueueStatus: () => ipcRenderer.invoke('transfer:queue-status'),
+  pauseAll: () => ipcRenderer.invoke('transfer:pause-all'),
+  resumeAll: () => ipcRenderer.invoke('transfer:resume-all'),
   clearHistory: () => ipcRenderer.invoke('transfer:clear-history'),
   deleteTransfer: (id: string) => ipcRenderer.invoke('transfer:delete', id),
 
@@ -204,41 +206,34 @@ contextBridge.exposeInMainWorld('electronAPI', {
   selectFolder: () => ipcRenderer.invoke('dialog:select-folder'),
   selectFolderForUpload: () => ipcRenderer.invoke('dialog:select-folder-for-upload'),
 
-  // 事件监听
+  // 事件监听（返回 cleanup 函数，组件在卸载时调用）
   onTransferProgress: (callback: (data: TransferProgress) => void) => {
     const wrapper = (_: unknown, data: TransferProgress) => callback(data)
-    listenerWrappers.set(callback, wrapper)
     ipcRenderer.on('transfer:progress', wrapper)
+    return () => { ipcRenderer.removeListener('transfer:progress', wrapper) }
   },
   onTransferStarted: (callback: (data: TransferTask) => void) => {
     const wrapper = (_: unknown, data: TransferTask) => callback(data)
-    listenerWrappers.set(callback, wrapper)
     ipcRenderer.on('transfer:started', wrapper)
+    return () => { ipcRenderer.removeListener('transfer:started', wrapper) }
   },
   onTransferComplete: (callback: (data: TransferTask) => void) => {
     const wrapper = (_: unknown, data: TransferTask) => callback(data)
-    listenerWrappers.set(callback, wrapper)
     ipcRenderer.on('transfer:complete', wrapper)
+    return () => { ipcRenderer.removeListener('transfer:complete', wrapper) }
   },
   onTransferError: (callback: (data: { id: string; error: string }) => void) => {
     const wrapper = (_: unknown, data: { id: string; error: string }) => callback(data)
-    listenerWrappers.set(callback, wrapper)
     ipcRenderer.on('transfer:error', wrapper)
+    return () => { ipcRenderer.removeListener('transfer:error', wrapper) }
   },
   onLogMessage: (callback: (data: LogMessage) => void) => {
     const wrapper = (_: unknown, data: LogMessage) => callback(data)
-    listenerWrappers.set(callback, wrapper)
     ipcRenderer.on('log:message', wrapper)
+    return () => { ipcRenderer.removeListener('log:message', wrapper) }
   },
   removeAllListeners: (channel: string) => {
     ipcRenderer.removeAllListeners(channel)
-  },
-  removeListener: (channel: string, callback: (...args: unknown[]) => void) => {
-    const wrapper = listenerWrappers.get(callback)
-    if (wrapper) {
-      ipcRenderer.removeListener(channel, wrapper as (...args: unknown[]) => void)
-      listenerWrappers.delete(callback)
-    }
   },
 
   // 应用信息

@@ -17,13 +17,46 @@ export class TransferManager {
   constructor(configStore: ConfigStore) {
     this.configStore = configStore
     const settings = configStore.getSettings()
-    this.maxConcurrency = settings.maxConcurrency
-    this.maxRetries = settings.maxRetries
-    this.retryDelayMs = settings.retryDelayMs
+    this.maxConcurrency = settings.maxConcurrency || 3
+    this.maxRetries = settings.maxRetries || 3
+    this.retryDelayMs = settings.retryDelayMs || 1000
+
+    // 确保新会话不继承暂停状态
+    this.isPaused = false
+    // 清理可能残留的活跃任务
+    this.activeTasks.clear()
+
+    log.info(`[TransferManager] 初始化完成, maxConcurrency=${this.maxConcurrency}, maxRetries=${this.maxRetries}`)
+
+    // 启动时恢复未完成的任务
+    this.recoverPendingTasks()
+  }
+
+  // 恢复之前未完成的 pending/connecting 任务
+  private recoverPendingTasks(): void {
+    const transfers = this.configStore.getTransfers()
+    const pendingTasks = transfers.filter(
+      (t) => t.status === 'pending' || t.status === 'connecting'
+    )
+    if (pendingTasks.length > 0) {
+      log.info(`恢复 ${pendingTasks.length} 个未完成的任务`)
+      for (const task of pendingTasks) {
+        task.status = 'pending'
+        task.progress = 0
+        this.queue.push(task)
+        this.configStore.updateTransfer(task.id, { status: 'pending', progress: 0 })
+      }
+      // processQueue 将在 setMainWindow 后被调用
+    }
   }
 
   setMainWindow(window: BrowserWindow) {
     this.mainWindow = window
+    // 窗口就绪后，处理恢复的待执行任务
+    if (this.queue.length > 0) {
+      log.info(`窗口就绪，开始处理 ${this.queue.length} 个恢复的任务`)
+      this.processQueue()
+    }
   }
 
   // 添加传输任务
@@ -57,7 +90,7 @@ export class TransferManager {
     this.queue.push(task)
     this.configStore.addTransfer(task)
 
-    log.info(`任务已加入队列: ${task.id}, 文件数: ${task.files.length}`)
+    log.info(`[enqueue] 任务已加入队列: ${task.id}, 文件数: ${task.files.length}, 队列长度: ${this.queue.length}`)
 
     // 通知渲染进程
     this.sendToRenderer('transfer:queued', task)
@@ -145,23 +178,40 @@ export class TransferManager {
 
   // 处理队列
   private async processQueue(): Promise<void> {
-    if (this.isPaused) return
-    if (this.activeTasks.size >= this.maxConcurrency) return
-    if (this.queue.length === 0) return
+    if (this.isPaused) {
+      log.info('[processQueue] 队列已暂停，跳过处理')
+      return
+    }
+    if (this.activeTasks.size >= this.maxConcurrency) {
+      log.info(`[processQueue] 并发已满: ${this.activeTasks.size}/${this.maxConcurrency}，跳过处理`)
+      return
+    }
+    if (this.queue.length === 0) {
+      return
+    }
 
     const task = this.queue.shift()
     if (!task) return
 
+    log.info(`[processQueue] 任务出队: ${task.id}, 当前活跃: ${this.activeTasks.size}`)
+
     this.activeTasks.set(task.id, task)
     task.status = 'connecting'
     task.startTime = Date.now()
-    this.configStore.updateTransfer(task.id, task)
+
+    // 持久化状态变更到磁盘
+    this.configStore.updateTransfer(task.id, {
+      status: 'connecting',
+      startTime: task.startTime,
+    })
     this.sendToRenderer('transfer:started', task)
 
     try {
+      log.info(`[processQueue] 开始执行任务: ${task.id}`)
       await this.executeTask(task)
+      log.info(`[processQueue] 任务完成: ${task.id}`)
     } catch (error) {
-      log.error(`任务执行失败: ${task.id}`, error)
+      log.error(`[processQueue] 任务执行失败: ${task.id}`, error)
 
       if (task.retryCount < this.maxRetries) {
         // 指数退避重试
@@ -172,6 +222,7 @@ export class TransferManager {
 
         setTimeout(() => {
           task.status = 'pending'
+          this.configStore.updateTransfer(task.id, { status: 'pending', retryCount: task.retryCount })
           this.queue.push(task)
           this.processQueue()
         }, delay)
@@ -179,11 +230,16 @@ export class TransferManager {
         task.status = 'failed'
         task.error = error instanceof Error ? error.message : String(error)
         task.endTime = Date.now()
-        this.configStore.updateTransfer(task.id, task)
+        this.configStore.updateTransfer(task.id, {
+          status: 'failed',
+          error: task.error,
+          endTime: task.endTime,
+        })
         this.sendToRenderer('transfer:error', { id: task.id, error: task.error })
       }
     } finally {
       this.activeTasks.delete(task.id)
+      log.info(`[processQueue] 任务释放: ${task.id}, 剩余活跃: ${this.activeTasks.size}`)
       this.processQueue()
     }
   }
@@ -220,7 +276,9 @@ export class TransferManager {
         totalSize: 0,
       })
 
+      log.info(`[executeTask] 连接服务器: ${server.host}:${server.port} (${server.type})`)
       await client.connect(server)
+      log.info(`[executeTask] 服务器连接成功: ${task.id}`)
 
       // 传输文件
       task.status = 'transferring'

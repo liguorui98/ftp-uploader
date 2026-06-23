@@ -288,7 +288,7 @@ const FileWatcher: React.FC = () => {
             <Select placeholder="选择服务器">
               {servers.map((server) => (
                 <Option key={server.id} value={server.id}>
-                  {server.name} ({server.type.toUpperCase()})
+                  {server.name || '未知服务器'} ({server.type?.toUpperCase() || 'FTP'})
                 </Option>
               ))}
             </Select>
@@ -320,17 +320,18 @@ const FileWatcher: React.FC = () => {
           </Form.Item>
 
           <Form.Item
-            name="debounceMs"
             label="防抖时间（毫秒）"
             extra="等待文件写入完成后再上传"
           >
             <Space.Compact style={{ width: '100%' }}>
-              <InputNumber
-                min={500}
-                max={30000}
-                step={500}
-                style={{ flex: 1 }}
-              />
+              <Form.Item name="debounceMs" noStyle>
+                <InputNumber
+                  min={500}
+                  max={30000}
+                  step={500}
+                  style={{ flex: 1 }}
+                />
+              </Form.Item>
               <span style={{ padding: '0 11px', lineHeight: '30px', background: '#fafafa', border: '1px solid #d9d9d9', borderLeft: 0, borderRadius: '0 6px 6px 0' }}>毫秒</span>
             </Space.Compact>
           </Form.Item>

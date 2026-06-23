@@ -63,7 +63,7 @@ const StatusBar: React.FC<StatusBarProps> = ({ queueStatus, serverCount }) => {
       <div style={{ flex: 1 }} />
 
       {/* 版本信息 */}
-      <Text type="secondary" style={{ fontSize: 11 }}>v1.0.1-beta</Text>
+      <Text type="secondary" style={{ fontSize: 11 }}>v1.0.3-beta</Text>
     </div>
   )
 }

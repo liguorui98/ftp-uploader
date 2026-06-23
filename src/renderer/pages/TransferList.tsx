@@ -128,7 +128,12 @@ const TransferList: React.FC = () => {
     // 命名 handler 以便 removeListener 精确移除
     const onStarted = (data: any) => {
       setTransfers((prev) => {
-        if (prev.find((t) => t.id === data.id)) return prev
+        const idx = prev.findIndex((t) => t.id === data.id)
+        if (idx >= 0) {
+          const next = [...prev]
+          next[idx] = data
+          return next
+        }
         return [data, ...prev]
       })
     }
@@ -177,20 +182,16 @@ const TransferList: React.FC = () => {
       loadTransfers()
     }
 
+    const cleanups: Array<() => void> = []
     if (window.electronAPI) {
-      window.electronAPI.onTransferStarted?.(onStarted)
-      window.electronAPI.onTransferProgress?.(onProgress)
-      window.electronAPI.onTransferComplete?.(onComplete)
-      window.electronAPI.onTransferError?.(onError)
+      cleanups.push(window.electronAPI.onTransferStarted?.(onStarted) || (() => {}))
+      cleanups.push(window.electronAPI.onTransferProgress?.(onProgress) || (() => {}))
+      cleanups.push(window.electronAPI.onTransferComplete?.(onComplete) || (() => {}))
+      cleanups.push(window.electronAPI.onTransferError?.(onError) || (() => {}))
     }
 
     return () => {
-      if (window.electronAPI) {
-        window.electronAPI.removeListener?.('transfer:started', onStarted)
-        window.electronAPI.removeListener?.('transfer:progress', onProgress)
-        window.electronAPI.removeListener?.('transfer:complete', onComplete)
-        window.electronAPI.removeListener?.('transfer:error', onError)
-      }
+      cleanups.forEach((cleanup) => cleanup())
     }
   }, [])
 

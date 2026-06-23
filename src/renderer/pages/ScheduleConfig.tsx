@@ -62,6 +62,7 @@ const ScheduleConfig: React.FC = () => {
   const [editingSchedule, setEditingSchedule] = useState<ScheduleConfig | null>(null)
   const [isModalVisible, setIsModalVisible] = useState(false)
   const [form] = Form.useForm()
+  const [activeMode, setActiveMode] = useState<string>('interval')
 
   useEffect(() => {
     loadData()
@@ -85,6 +86,7 @@ const ScheduleConfig: React.FC = () => {
   const handleAdd = () => {
     setEditingSchedule(null)
     form.resetFields()
+    setActiveMode('interval')
     form.setFieldsValue({
       mode: 'interval',
       intervalMinutes: 5,
@@ -95,6 +97,7 @@ const ScheduleConfig: React.FC = () => {
 
   const handleEdit = (schedule: ScheduleConfig) => {
     setEditingSchedule(schedule)
+    setActiveMode(schedule.mode || 'interval')
     form.setFieldsValue({
       ...schedule,
       sourcePaths: Array.isArray(schedule.sourcePaths) ? schedule.sourcePaths.join('\n') : schedule.sourcePaths,
@@ -143,7 +146,7 @@ const ScheduleConfig: React.FC = () => {
         remotePath: values.remotePath,
         filePattern: values.filePattern,
         deleteAfterUpload: values.deleteAfterUpload,
-        mode: values.mode,
+        mode: activeMode as ScheduleConfig['mode'],
         intervalMinutes: values.intervalMinutes,
         cronExpression: values.cronExpression,
         dailyTime: values.dailyTime?.format('HH:mm'),
@@ -327,7 +330,7 @@ const ScheduleConfig: React.FC = () => {
             <Select placeholder="选择服务器">
               {servers.map((server) => (
                 <Option key={server.id} value={server.id}>
-                  {server.name} ({server.type.toUpperCase()})
+                  {server.name || '未知服务器'} ({server.type?.toUpperCase() || 'FTP'})
                 </Option>
               ))}
             </Select>
@@ -367,27 +370,27 @@ const ScheduleConfig: React.FC = () => {
           </Form.Item>
 
           <Form.Item
-            name="mode"
             label="调度模式"
-            rules={[{ required: true, message: '请选择调度模式' }]}
+            required
           >
             <Tabs
+              activeKey={activeMode}
               items={[
                 {
                   key: 'interval',
                   label: '间隔模式',
                   children: (
-                    <Form.Item name="intervalMinutes" noStyle>
-                      <Space.Compact style={{ width: '100%' }}>
+                    <Space.Compact style={{ width: '100%' }}>
+                      <Form.Item name="intervalMinutes" noStyle>
                         <InputNumber
                           min={1}
                           max={1440}
                           placeholder="分钟"
                           style={{ flex: 1 }}
                         />
-                        <span style={{ padding: '0 11px', lineHeight: '30px', background: '#fafafa', border: '1px solid #d9d9d9', borderLeft: 0, borderRadius: '0 6px 6px 0' }}>分钟</span>
-                      </Space.Compact>
-                    </Form.Item>
+                      </Form.Item>
+                      <span style={{ padding: '0 11px', lineHeight: '30px', background: '#fafafa', border: '1px solid #d9d9d9', borderLeft: 0, borderRadius: '0 6px 6px 0' }}>分钟</span>
+                    </Space.Compact>
                   ),
                 },
                 {
@@ -431,7 +434,7 @@ const ScheduleConfig: React.FC = () => {
                   ),
                 },
               ]}
-              onChange={(key) => form.setFieldsValue({ mode: key })}
+              onChange={(key) => { setActiveMode(key); form.setFieldsValue({ mode: key }) }}
             />
           </Form.Item>
 

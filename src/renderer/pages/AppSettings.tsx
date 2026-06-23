@@ -196,15 +196,15 @@ const AppSettings: React.FC = () => {
       label: '传输设置',
       children: (
         <div>
-          <Form.Item name="maxConcurrency" label="最大并发传输数">
+          <Form.Item name="maxConcurrency" label="最大并发传输数" rules={[{ required: true, message: '请输入并发数' }]}>
             <InputNumber min={1} max={10} style={{ width: '100%' }} />
           </Form.Item>
 
-          <Form.Item name="maxRetries" label="最大重试次数">
+          <Form.Item name="maxRetries" label="最大重试次数" rules={[{ required: true, message: '请输入重试次数' }]}>
             <InputNumber min={0} max={10} style={{ width: '100%' }} />
           </Form.Item>
 
-          <Form.Item name="retryDelayMs" label="重试间隔（毫秒）">
+          <Form.Item name="retryDelayMs" label="重试间隔（毫秒）" rules={[{ required: true, message: '请输入重试间隔' }]}>
             <InputNumber min={500} max={60000} step={500} style={{ width: '100%' }} />
           </Form.Item>
 
