@@ -7,6 +7,8 @@ import { createClient, TransferClient } from './ftp-client'
 export class TransferManager {
   private queue: TransferTask[] = []
   private activeTasks: Map<string, TransferTask> = new Map()
+  private activeClients: Map<string, TransferClient> = new Map()
+  private cancelledTasks: Set<string> = new Set()
   private maxConcurrency: number
   private maxRetries: number
   private retryDelayMs: number
@@ -25,6 +27,8 @@ export class TransferManager {
     this.isPaused = false
     // 清理可能残留的活跃任务
     this.activeTasks.clear()
+    this.activeClients.clear()
+    this.cancelledTasks.clear()
 
     log.info(`[TransferManager] 初始化完成, maxConcurrency=${this.maxConcurrency}, maxRetries=${this.maxRetries}`)
 
@@ -105,6 +109,7 @@ export class TransferManager {
   cancel(taskId: string): void {
     // 从队列中移除
     this.queue = this.queue.filter((t) => t.id !== taskId)
+    this.cancelledTasks.add(taskId)
 
     // 如果正在传输，标记为取消
     const activeTask = this.activeTasks.get(taskId)
@@ -113,6 +118,13 @@ export class TransferManager {
       this.activeTasks.delete(taskId)
       this.configStore.updateTransfer(taskId, { status: 'cancelled' })
       this.sendToRenderer('transfer:cancelled', activeTask)
+
+      // 断开客户端连接，中断正在进行的传输
+      const client = this.activeClients.get(taskId)
+      if (client) {
+        client.disconnect().catch(() => {})
+        this.activeClients.delete(taskId)
+      }
     }
 
     log.info(`任务已取消: ${taskId}`)
@@ -213,6 +225,13 @@ export class TransferManager {
     } catch (error) {
       log.error(`[processQueue] 任务执行失败: ${task.id}`, error)
 
+      // 取消的任务不重试
+      if (this.cancelledTasks.has(task.id)) {
+        this.cancelledTasks.delete(task.id)
+        log.info(`[processQueue] 任务已取消，跳过重试: ${task.id}`)
+        return
+      }
+
       if (task.retryCount < this.maxRetries) {
         // 指数退避重试
         const delay = this.retryDelayMs * Math.pow(2, task.retryCount)
@@ -252,6 +271,7 @@ export class TransferManager {
     }
 
     const client = createClient(server.type)
+    this.activeClients.set(task.id, client)
 
     // 速度追踪变量
     let lastTransferred = 0
@@ -374,6 +394,7 @@ export class TransferManager {
 
       log.info(`任务完成: ${task.id}, 耗时: ${task.endTime - task.startTime!}ms`)
     } finally {
+      this.activeClients.delete(task.id)
       await client.disconnect()
     }
   }

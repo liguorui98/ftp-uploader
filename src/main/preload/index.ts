@@ -70,6 +70,7 @@ export interface ElectronAPI {
 
   // 系统功能
   openFilePath: (filePath: string) => Promise<{ success: boolean; error?: string }>
+  showItemInFolder: (filePath: string) => Promise<{ success: boolean }>
 }
 
 // 类型定义
@@ -249,4 +250,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // 系统功能
   openFilePath: (filePath: string) => ipcRenderer.invoke('shell:open-path', filePath),
+  showItemInFolder: (filePath: string) => ipcRenderer.invoke('shell:show-item-in-folder', filePath),
 } as ElectronAPI)

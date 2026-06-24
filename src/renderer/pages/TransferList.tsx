@@ -25,6 +25,7 @@ import {
   InboxOutlined,
   UploadOutlined,
   CloseOutlined,
+  StopOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 
@@ -446,16 +447,30 @@ const TransferList: React.FC = () => {
     }
   }
 
-  const handleOpenFile = async (filePath: string) => {
+  const handleOpenFolder = async (filePath: string) => {
     try {
       if (window.electronAPI) {
-        const result = await window.electronAPI.openFilePath?.(filePath)
+        const result = await window.electronAPI.showItemInFolder?.(filePath)
         if (result && !result.success) {
-          message.error('打开文件失败')
+          message.error('打开文件夹失败')
         }
       }
     } catch (error) {
-      message.error('打开文件失败')
+      message.error('打开文件夹失败')
+    }
+  }
+
+  const handleCancel = async (id: string) => {
+    try {
+      if (window.electronAPI) {
+        await window.electronAPI.cancelTransfer(id)
+        setTransfers((prev) =>
+          prev.map((t) => (t.id === id ? { ...t, status: 'cancelled' } : t))
+        )
+        message.success('已取消')
+      }
+    } catch (error) {
+      message.error('取消失败')
     }
   }
 
@@ -592,7 +607,7 @@ const TransferList: React.FC = () => {
     {
       title: '操作',
       key: 'actions',
-      width: 160,
+      width: 180,
       render: (_: unknown, record: TransferTask) => (
         <Space>
           {record.status === 'failed' && (
@@ -604,12 +619,19 @@ const TransferList: React.FC = () => {
               />
             </Tooltip>
           )}
+          {(record.status === 'pending' || record.status === 'connecting' || record.status === 'transferring') && (
+            <Popconfirm title="确定取消此上传任务？" onConfirm={() => handleCancel(record.id)}>
+              <Tooltip title="取消">
+                <Button type="text" danger icon={<StopOutlined />} />
+              </Tooltip>
+            </Popconfirm>
+          )}
           {record.files?.[0]?.localPath && (
-            <Tooltip title="打开文件">
+            <Tooltip title="打开文件夹">
               <Button
                 type="text"
                 icon={<FolderOpenOutlined />}
-                onClick={() => handleOpenFile(record.files[0].localPath)}
+                onClick={() => handleOpenFolder(record.files[0].localPath)}
               />
             </Tooltip>
           )}
@@ -781,7 +803,7 @@ const TransferList: React.FC = () => {
           rowKey="id"
           loading={loading}
           pagination={{
-            pageSize: 20,
+            defaultPageSize: 20,
             showSizeChanger: true,
             showTotal: (total) => `共 ${total} 条记录`,
           }}

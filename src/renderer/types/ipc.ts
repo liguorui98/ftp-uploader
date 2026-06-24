@@ -82,6 +82,7 @@ export interface ElectronAPI {
 
   // 系统功能
   openFilePath: (filePath: string) => Promise<{ success: boolean; error?: string }>
+  showItemInFolder: (filePath: string) => Promise<{ success: boolean }>
 }
 
 declare global {

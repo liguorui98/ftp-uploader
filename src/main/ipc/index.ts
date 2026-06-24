@@ -233,4 +233,9 @@ export function registerFileWatcherIPC(
     const error = await shell.openPath(filePath)
     return { success: !error, error }
   })
+
+  ipcMain.handle('shell:show-item-in-folder', (_, filePath) => {
+    shell.showItemInFolder(filePath)
+    return { success: true }
+  })
 }
