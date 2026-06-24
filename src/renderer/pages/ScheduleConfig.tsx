@@ -192,6 +192,23 @@ const ScheduleConfig: React.FC = () => {
     }
   }
 
+  const handleSelectFiles = async () => {
+    try {
+      if (window.electronAPI) {
+        const files = await window.electronAPI.selectFiles()
+        if (files && files.length > 0) {
+          const currentPaths = form.getFieldValue('sourcePaths') || ''
+          const newPaths = files.join('\n')
+          form.setFieldsValue({
+            sourcePaths: currentPaths ? `${currentPaths}\n${newPaths}` : newPaths,
+          })
+        }
+      }
+    } catch (error) {
+      console.error('选择文件失败:', error)
+    }
+  }
+
   const getModeLabel = (mode: string) => {
     switch (mode) {
       case 'interval': return '间隔模式'
@@ -348,14 +365,24 @@ const ScheduleConfig: React.FC = () => {
             />
           </Form.Item>
 
-          <Button
-            type="dashed"
-            onClick={handleSelectFolder}
-            style={{ marginBottom: 16 }}
-            block
-          >
-            选择文件夹
-          </Button>
+          <Space style={{ marginBottom: 16, width: '100%' }}>
+            <Button
+              type="dashed"
+              onClick={handleSelectFolder}
+              style={{ flex: 1 }}
+              block
+            >
+              选择文件夹
+            </Button>
+            <Button
+              type="dashed"
+              onClick={handleSelectFiles}
+              style={{ flex: 1 }}
+              block
+            >
+              选择文件
+            </Button>
+          </Space>
 
           <Form.Item
             name="remotePath"

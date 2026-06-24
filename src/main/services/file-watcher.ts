@@ -35,9 +35,14 @@ export class FileWatcherService {
         },
       })
 
-      // 监听文件添加事件
+      // 监听文件添加和修改事件
       watcher.on('add', (filePath) => {
-        this.onFileAdded(filePath, config)
+        log.debug(`[watcher] add 事件: ${filePath}`)
+        this.onFileEvent(filePath, config)
+      })
+      watcher.on('change', (filePath) => {
+        log.info(`[watcher] change 事件: ${filePath}`)
+        this.onFileEvent(filePath, config)
       })
 
       // 监听错误
@@ -59,11 +64,12 @@ export class FileWatcherService {
       watcher.close()
       this.watchers.delete(id)
 
-      // 清理防抖定时器
-      const timer = this.debounceTimers.get(id)
-      if (timer) {
-        clearTimeout(timer)
-        this.debounceTimers.delete(id)
+      // 清理该监控的所有防抖定时器
+      for (const [key, timer] of this.debounceTimers.entries()) {
+        if (key.startsWith(id + ':')) {
+          clearTimeout(timer)
+          this.debounceTimers.delete(key)
+        }
       }
 
       log.info(`文件监控已移除: ${id}`)
@@ -101,8 +107,8 @@ export class FileWatcherService {
     }))
   }
 
-  // 文件添加事件处理
-  private onFileAdded(filePath: string, config: WatcherConfig): void {
+  // 文件添加/修改事件处理
+  private onFileEvent(filePath: string, config: WatcherConfig): void {
     const fileName = path.basename(filePath)
 
     // 检查是否匹配文件模式
@@ -136,8 +142,8 @@ export class FileWatcherService {
 
     const fileName = path.basename(filePath)
 
-    // 构建远程路径
-    const relativePath = path.relative(config.watchPath, filePath)
+    // 构建远程路径：用 dirname 保留监控文件夹自身的名称
+    const relativePath = path.relative(path.dirname(config.watchPath), filePath)
     const remotePath = path.join(config.remotePath, relativePath).replace(/\\/g, '/')
 
     log.info(`检测到新文件: ${fileName}, 准备上传到: ${remotePath}`)

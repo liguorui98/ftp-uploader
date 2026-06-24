@@ -156,16 +156,18 @@ export class Scheduler {
 
   // 构建远程路径
   private buildRemotePath(localPath: string, config: ScheduleConfig): string {
-    // 从第一个源路径推断相对路径
-    const baseSourcePath = config.sourcePaths[0]
-    let relativePath = localPath
-
-    // 如果是目录中的文件，提取相对路径
-    if (baseSourcePath && localPath.startsWith(baseSourcePath)) {
-      relativePath = path.relative(baseSourcePath, localPath)
-    } else {
-      relativePath = path.basename(localPath)
+    // 找到包含此文件的最长匹配源路径
+    let baseSourcePath: string | undefined
+    for (const sp of config.sourcePaths) {
+      if (localPath.startsWith(sp) && (!baseSourcePath || sp.length > baseSourcePath.length)) {
+        baseSourcePath = sp
+      }
     }
+
+    // 用 dirname 作为基准，保留源文件夹自身的名称
+    const relativePath = baseSourcePath
+      ? path.relative(path.dirname(baseSourcePath), localPath)
+      : path.basename(localPath)
 
     // 构建远程路径
     return path.join(config.remotePath, relativePath).replace(/\\/g, '/')
