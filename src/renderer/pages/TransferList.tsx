@@ -647,21 +647,9 @@ const TransferList: React.FC = () => {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <Title level={4}>
-          <CloudUploadOutlined /> 手动传输
-        </Title>
-        <Space>
-          <Button icon={<ReloadOutlined />} onClick={loadTransfers}>
-            刷新
-          </Button>
-          <Popconfirm title="确定要清空所有历史记录吗？" onConfirm={handleClearHistory}>
-            <Button danger icon={<DeleteOutlined />}>
-              清空
-            </Button>
-          </Popconfirm>
-        </Space>
-      </div>
+      <Title level={4} style={{ marginBottom: 24 }}>
+        <CloudUploadOutlined /> 手动传输
+      </Title>
 
       {/* 手动上传区域 */}
       <Card style={{ marginBottom: 16 }}>
@@ -796,7 +784,23 @@ const TransferList: React.FC = () => {
       </Card>
 
       {/* 传输列表 */}
-      <Card title="传输历史">
+      <Card
+        title={
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>传输历史</span>
+            <Space>
+              <Button size="small" icon={<ReloadOutlined />} onClick={loadTransfers}>
+                刷新
+              </Button>
+              <Popconfirm title="确定要清空所有历史记录吗？" onConfirm={handleClearHistory}>
+                <Button size="small" danger icon={<DeleteOutlined />}>
+                  清空
+                </Button>
+              </Popconfirm>
+            </Space>
+          </div>
+        }
+      >
         <Table
           columns={columns}
           dataSource={filteredTransfers}
