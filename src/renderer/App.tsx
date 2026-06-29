@@ -6,6 +6,7 @@ import TransferList from './pages/TransferList'
 import ServerSettings from './pages/ServerSettings'
 import ScheduleConfig from './pages/ScheduleConfig'
 import FileWatcher from './pages/FileWatcher'
+import ServerBrowser from './pages/ServerBrowser'
 import AppSettings from './pages/AppSettings'
 
 class ErrorBoundary extends React.Component<
@@ -48,6 +49,7 @@ const App: React.FC = () => {
             <Route path="servers" element={<ServerSettings />} />
             <Route path="schedules" element={<ScheduleConfig />} />
             <Route path="watchers" element={<FileWatcher />} />
+            <Route path="browser" element={<ServerBrowser />} />
             <Route path="settings" element={<AppSettings />} />
           </Route>
         </Routes>

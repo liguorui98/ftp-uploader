@@ -1,5 +1,6 @@
 import * as ftp from 'basic-ftp'
 import SftpClient from 'ssh2-sftp-client'
+import { PassThrough } from 'stream'
 import path from 'path'
 import fs from 'fs'
 import log from 'electron-log'
@@ -10,10 +11,13 @@ export type ProgressCallback = (transferred: number, total: number) => void
 export interface TransferClient {
   connect(config: ServerConfig): Promise<void>
   upload(localPath: string, remotePath: string, onProgress?: ProgressCallback): Promise<void>
-  download(remotePath: string, localPath: string, onProgress?: ProgressCallback): Promise<void>
+  download(remotePath: string, localPath: string, onProgress?: ProgressCallback, signal?: AbortSignal): Promise<void>
   list(remotePath: string): Promise<FileInfo[]>
   mkdir(remotePath: string, recursive?: boolean): Promise<void>
   exists(remotePath: string): Promise<boolean>
+  delete(remotePath: string): Promise<void>
+  rename(oldPath: string, newPath: string): Promise<void>
+  cancel(): void
   disconnect(): Promise<void>
   testConnection(): Promise<boolean>
 }
@@ -122,7 +126,7 @@ class FTPClient implements TransferClient {
     }
   }
 
-  async download(remotePath: string, localPath: string, onProgress?: ProgressCallback): Promise<void> {
+  async download(remotePath: string, localPath: string, onProgress?: ProgressCallback, signal?: AbortSignal): Promise<void> {
     if (this.client.closed) {
       throw new Error('FTP客户端未连接')
     }
@@ -133,11 +137,32 @@ class FTPClient implements TransferClient {
         fs.mkdirSync(localDir, { recursive: true })
       }
 
-      await this.client.downloadTo(localPath, remotePath)
+      const size = await this.client.size(remotePath)
+      const writeStream = fs.createWriteStream(localPath)
 
-      if (onProgress) {
-        const stats = fs.statSync(localPath)
-        onProgress(stats.size, stats.size)
+      if (onProgress && size > 0) {
+        const passThrough = new PassThrough()
+        let transferred = 0
+
+        passThrough.on('data', (chunk: Buffer) => {
+          transferred += chunk.length
+          onProgress(transferred, size)
+        })
+
+        // 监听取消信号 → 销毁 data socket 中断传输
+        if (signal) {
+          const onAbort = () => { try { this.cancel() } catch {} }
+          if (signal.aborted) {
+            onAbort()
+          } else {
+            signal.addEventListener('abort', onAbort, { once: true })
+          }
+        }
+
+        passThrough.pipe(writeStream)
+        await this.client.downloadTo(passThrough, remotePath)
+      } else {
+        await this.client.downloadTo(writeStream, remotePath)
       }
 
       log.info(`FTP下载完成: ${remotePath} -> ${localPath}`)
@@ -196,6 +221,52 @@ class FTPClient implements TransferClient {
       } catch {
         return false
       }
+    }
+  }
+
+  async delete(remotePath: string): Promise<void> {
+    if (this.client.closed) {
+      throw new Error('FTP客户端未连接')
+    }
+
+    try {
+      await this.client.remove(remotePath)
+      log.info(`FTP删除完成: ${remotePath}`)
+    } catch (error) {
+      log.error(`FTP删除失败: ${remotePath}`, error)
+      throw error
+    }
+  }
+
+  async rename(oldPath: string, newPath: string): Promise<void> {
+    if (this.client.closed) {
+      throw new Error('FTP客户端未连接')
+    }
+
+    try {
+      await this.client.rename(oldPath, newPath)
+      log.info(`FTP重命名完成: ${oldPath} -> ${newPath}`)
+    } catch (error) {
+      log.error(`FTP重命名失败: ${oldPath}`, error)
+      throw error
+    }
+  }
+
+  cancel(): void {
+    log.info('[FTPClient] cancel() called')
+    try {
+      const ds = this.client.ftp.dataSocket
+      log.info(`[FTPClient] dataSocket exists: ${!!ds}, destroyed: ${ds?.destroyed}`)
+      this.client.ftp.dataSocket?.destroy(new Error('下载已取消'))
+      log.info('[FTPClient] dataSocket.destroy() done')
+    } catch (e) {
+      log.error('[FTPClient] dataSocket.destroy() error:', e)
+    }
+    try {
+      this.client.close()
+      log.info('[FTPClient] client.close() done')
+    } catch (e) {
+      log.error('[FTPClient] client.close() error:', e)
     }
   }
 
@@ -322,7 +393,7 @@ class SFTPClient implements TransferClient {
     }
   }
 
-  async download(remotePath: string, localPath: string, onProgress?: ProgressCallback): Promise<void> {
+  async download(remotePath: string, localPath: string, onProgress?: ProgressCallback, signal?: AbortSignal): Promise<void> {
     if (!this.client) {
       throw new Error('SFTP客户端未连接')
     }
@@ -333,11 +404,33 @@ class SFTPClient implements TransferClient {
         fs.mkdirSync(localDir, { recursive: true })
       }
 
-      await this.client.get(remotePath, localPath)
+      const stat = await this.client.stat(remotePath)
+      const totalSize = stat.size
 
-      if (onProgress) {
-        const stats = fs.statSync(localPath)
-        onProgress(stats.size, stats.size)
+      if (onProgress && totalSize > 0) {
+        const passThrough = new PassThrough()
+        let transferred = 0
+
+        passThrough.on('data', (chunk: Buffer) => {
+          transferred += chunk.length
+          onProgress(transferred, totalSize)
+        })
+
+        // 监听取消信号 → 关闭连接中断传输
+        if (signal) {
+          const onAbort = () => { try { this.cancel() } catch {} }
+          if (signal.aborted) {
+            onAbort()
+          } else {
+            signal.addEventListener('abort', onAbort, { once: true })
+          }
+        }
+
+        const writeStream = fs.createWriteStream(localPath)
+        passThrough.pipe(writeStream)
+        await this.client.get(remotePath, passThrough)
+      } else {
+        await this.client.get(remotePath, localPath)
       }
 
       log.info(`SFTP下载完成: ${remotePath} -> ${localPath}`)
@@ -387,6 +480,49 @@ class SFTPClient implements TransferClient {
       return true
     } catch {
       return false
+    }
+  }
+
+  async delete(remotePath: string): Promise<void> {
+    if (!this.client) {
+      throw new Error('SFTP客户端未连接')
+    }
+
+    try {
+      const type = await this.client.exists(remotePath)
+      if (type === 'd') {
+        await this.client.rmdir(remotePath, true)
+      } else {
+        await this.client.delete(remotePath)
+      }
+      log.info(`SFTP删除完成: ${remotePath}`)
+    } catch (error) {
+      log.error(`SFTP删除失败: ${remotePath}`, error)
+      throw error
+    }
+  }
+
+  async rename(oldPath: string, newPath: string): Promise<void> {
+    if (!this.client) {
+      throw new Error('SFTP客户端未连接')
+    }
+
+    try {
+      await this.client.rename(oldPath, newPath)
+      log.info(`SFTP重命名完成: ${oldPath} -> ${newPath}`)
+    } catch (error) {
+      log.error(`SFTP重命名失败: ${oldPath}`, error)
+      throw error
+    }
+  }
+
+  cancel(): void {
+    log.info('[SFTPClient] cancel() called')
+    try {
+      this.client.end()
+      log.info('[SFTPClient] client.end() done')
+    } catch (e) {
+      log.error('[SFTPClient] client.end() error:', e)
     }
   }
 

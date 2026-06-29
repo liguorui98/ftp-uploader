@@ -71,6 +71,35 @@ export interface ElectronAPI {
   // 系统功能
   openFilePath: (filePath: string) => Promise<{ success: boolean; error?: string }>
   showItemInFolder: (filePath: string) => Promise<{ success: boolean }>
+
+  // 服务器文件浏览器
+  browserList: (serverId: string, remotePath: string) => Promise<Array<{
+    name: string
+    type: 'file' | 'directory' | 'symbolicLink'
+    size: number
+    modifyTime: string
+    permissions: string
+  }>>
+  browserMkdir: (serverId: string, remotePath: string, dirName: string) => Promise<{ success: boolean }>
+  browserDelete: (serverId: string, remotePath: string) => Promise<{ success: boolean }>
+  browserRename: (serverId: string, oldPath: string, newPath: string) => Promise<{ success: boolean }>
+  browserDownload: (serverId: string, remotePath: string) => Promise<{ success: boolean; localPath?: string; downloadId: string }>
+  browserCancelDownload: (downloadId: string) => Promise<{ success: boolean }>
+  onBrowserDownloadStarted: (callback: (data: { downloadId: string }) => void) => () => void
+  onBrowserDownloadProgress: (callback: (data: {
+    downloadId: string
+    fileName: string
+    transferred: number
+    total: number
+    speed: number
+    elapsedTime: number
+    estimatedTimeRemaining: number
+  }) => void) => () => void
+  onBrowserDownloadComplete: (callback: (data: {
+    downloadId: string
+    success: boolean
+    error?: string
+  }) => void) => () => void
 }
 
 // 类型定义
@@ -251,4 +280,32 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 系统功能
   openFilePath: (filePath: string) => ipcRenderer.invoke('shell:open-path', filePath),
   showItemInFolder: (filePath: string) => ipcRenderer.invoke('shell:show-item-in-folder', filePath),
+
+  // 服务器文件浏览器
+  browserList: (serverId: string, remotePath: string) => ipcRenderer.invoke('browser:list', serverId, remotePath),
+  browserMkdir: (serverId: string, remotePath: string, dirName: string) => ipcRenderer.invoke('browser:mkdir', serverId, remotePath, dirName),
+  browserDelete: (serverId: string, remotePath: string) => ipcRenderer.invoke('browser:delete', serverId, remotePath),
+  browserRename: (serverId: string, oldPath: string, newPath: string) => ipcRenderer.invoke('browser:rename', serverId, oldPath, newPath),
+  browserDownload: (serverId: string, remotePath: string) => ipcRenderer.invoke('browser:download', serverId, remotePath),
+  browserCancelDownload: (downloadId: string) => ipcRenderer.invoke('browser:cancel-download', downloadId),
+  onBrowserDownloadStarted: (callback: (data: { downloadId: string }) => void) => {
+    const wrapper = (_: unknown, data: any) => callback(data)
+    ipcRenderer.on('browser:download-started', wrapper)
+    return () => { ipcRenderer.removeListener('browser:download-started', wrapper) }
+  },
+  onBrowserDownloadProgress: (callback: (data: {
+    downloadId: string; fileName: string; transferred: number; total: number;
+    speed: number; elapsedTime: number; estimatedTimeRemaining: number
+  }) => void) => {
+    const wrapper = (_: unknown, data: any) => callback(data)
+    ipcRenderer.on('browser:download-progress', wrapper)
+    return () => { ipcRenderer.removeListener('browser:download-progress', wrapper) }
+  },
+  onBrowserDownloadComplete: (callback: (data: {
+    downloadId: string; success: boolean; error?: string
+  }) => void) => {
+    const wrapper = (_: unknown, data: any) => callback(data)
+    ipcRenderer.on('browser:download-complete', wrapper)
+    return () => { ipcRenderer.removeListener('browser:download-complete', wrapper) }
+  },
 } as ElectronAPI)

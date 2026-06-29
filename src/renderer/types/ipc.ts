@@ -8,6 +8,8 @@ import {
   LogMessage,
   UploadParams,
   QueueStatus,
+  RemoteFileInfo,
+  DownloadProgress,
 } from './index'
 
 export interface ElectronAPI {
@@ -83,6 +85,17 @@ export interface ElectronAPI {
   // 系统功能
   openFilePath: (filePath: string) => Promise<{ success: boolean; error?: string }>
   showItemInFolder: (filePath: string) => Promise<{ success: boolean }>
+
+  // 服务器文件浏览器
+  browserList: (serverId: string, remotePath: string) => Promise<RemoteFileInfo[]>
+  browserMkdir: (serverId: string, remotePath: string, dirName: string) => Promise<{ success: boolean }>
+  browserDelete: (serverId: string, remotePath: string) => Promise<{ success: boolean }>
+  browserRename: (serverId: string, oldPath: string, newPath: string) => Promise<{ success: boolean }>
+  browserDownload: (serverId: string, remotePath: string) => Promise<{ success: boolean; localPath?: string; downloadId: string }>
+  browserCancelDownload: (downloadId: string) => Promise<{ success: boolean }>
+  onBrowserDownloadStarted: (callback: (data: { downloadId: string }) => void) => () => void
+  onBrowserDownloadProgress: (callback: (data: DownloadProgress) => void) => () => void
+  onBrowserDownloadComplete: (callback: (data: { downloadId: string; success: boolean; error?: string }) => void) => () => void
 }
 
 declare global {

@@ -121,3 +121,23 @@ export interface QueueStatus {
   active: number
   isPaused: boolean
 }
+
+// 远程文件信息
+export interface RemoteFileInfo {
+  name: string
+  type: 'file' | 'directory' | 'symbolicLink'
+  size: number
+  modifyTime: string
+  permissions: string
+}
+
+// 下载进度
+export interface DownloadProgress {
+  downloadId: string
+  fileName: string
+  transferred: number
+  total: number
+  speed: number
+  elapsedTime: number
+  estimatedTimeRemaining: number
+}

@@ -6,7 +6,7 @@ import { ConfigStore } from './services/config-store'
 import { TransferManager } from './services/transfer-manager'
 import { Scheduler } from './services/scheduler'
 import { FileWatcherService } from './services/file-watcher'
-import { registerConfigIPC, registerTransferIPC, registerDialogIPC, registerFileWatcherIPC, registerAppIPC } from './ipc'
+import { registerConfigIPC, registerTransferIPC, registerDialogIPC, registerFileWatcherIPC, registerAppIPC, registerBrowserIPC } from './ipc'
 
 // 配置日志
 log.transports.file.level = 'info'
@@ -258,6 +258,7 @@ class App {
     registerDialogIPC(this.mainWindow!)
     registerFileWatcherIPC(this.fileWatcher, this.configStore, this.scheduler)
     registerAppIPC()
+    registerBrowserIPC(this.configStore, this.mainWindow!)
   }
 
   private restoreSchedules() {

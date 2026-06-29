@@ -7,6 +7,7 @@ import {
   SettingOutlined,
   ClockCircleOutlined,
   FolderOutlined,
+  FolderViewOutlined,
   ToolOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
@@ -53,6 +54,11 @@ const AppLayout: React.FC = () => {
       key: '/watchers',
       icon: <FolderOutlined />,
       label: '监控',
+    },
+    {
+      key: '/browser',
+      icon: <FolderViewOutlined />,
+      label: '文件管理',
     },
     {
       type: 'divider' as const,
