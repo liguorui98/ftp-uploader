@@ -275,7 +275,7 @@ const AppSettings: React.FC = () => {
           </Row>
 
           <Paragraph type="secondary">
-            {appInfo?.description || '一个跨平台的FTP/SFTP文件自动上传桌面应用，支持定时上传、文件监控和手动上传。'}
+            {appInfo?.description || '一个跨平台的FTP/SFTP文件传输桌面应用，支持定时上传、文件监控、手动上传和服务器文件管理。'}
           </Paragraph>
 
           <Divider />
@@ -318,6 +318,8 @@ const AppSettings: React.FC = () => {
             <li>手动选择文件/文件夹上传</li>
             <li>传输队列和并发控制</li>
             <li>失败自动重试</li>
+            <li>服务器文件浏览与管理（新建/下载/删除/重命名）</li>
+            <li>下载进度实时显示与取消下载</li>
             <li>跨平台支持（macOS和Windows）</li>
           </ul>
         </div>
